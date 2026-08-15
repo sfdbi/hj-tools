@@ -87,6 +87,8 @@ interface Props {
   deviationFail: boolean; // 偏离检验不通过时在图上标注大偏差点
   pointStyle: PointStyle;
   backbendIds: Set<string>; // 反曲节点（橙色高亮）
+  probeMode: boolean; // 查读探针模式：实时发光读数 + 线上选点
+  onProbeAddNode: (curveId: string, q: number, z: number) => void;
   onAddNode: (q: number, z: number) => void;
   onStroke: (pts: XY[]) => void; // 手绘整笔提交
   onMoveNode: (nodeId: string, q: number, z: number) => void;
@@ -102,11 +104,13 @@ const MARGIN = { l: 68, r: 20, t: 16, b: 46 };
 const NODE_HIT = 10;
 
 export default function PlotCanvas(props: Props) {
-  const { points, curves, activeCurveId, drawMode, deviations, resetSignal, canvasRef, showPoints, showNodes, showCurves, showCurveLabels, deviationFail, pointStyle, backbendIds } = props;
+  const { points, curves, activeCurveId, drawMode, deviations, resetSignal, canvasRef, showPoints, showNodes, showCurves, showCurveLabels, deviationFail, pointStyle, backbendIds, probeMode } = props;
   const [menu, setMenu] = useState<{ target: MenuTarget; x: number; y: number } | null>(null);
   const [mouse, setMouse] = useState<{ px: number; py: number } | null>(null); // CAD 式光标跟踪
   const [stroke, setStroke] = useState<XY[] | null>(null); // 手绘进行中的笔划（数据坐标）
   const strokePxLen = useRef(0); // 笔划像素长度（区分单击与手绘）
+  // 探针选中的线上点（发光标记）
+  const [probe, setProbe] = useState<{ q: number; z: number; curveId: string } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [vp, setVp] = useState<Viewport>({ x0: 0, x1: 10, y0: 0, y1: 10 });
@@ -559,6 +563,61 @@ export default function PlotCanvas(props: Props) {
       ctx.fill();
     }
 
+    // ── 查读探针：悬停引导线 + 选中点发光标记 ──
+    if (probeMode) {
+      const mouseInPlot =
+        mouse && mouse.px > MARGIN.l && mouse.px < MARGIN.l + plotW && mouse.py > MARGIN.t && mouse.py < MARGIN.t + plotH;
+      // 悬停十字引导线（青色虚线，通向两轴）
+      if (mouseInPlot) {
+        ctx.strokeStyle = 'rgba(34, 211, 238, 0.55)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(MARGIN.l, mouse.py);
+        ctx.lineTo(MARGIN.l + plotW, mouse.py);
+        ctx.moveTo(mouse.px, MARGIN.t);
+        ctx.lineTo(mouse.px, MARGIN.t + plotH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      // 选中的线上点：发光标记 + 轴向引导线
+      if (probe) {
+        const cx = toX(probe.q, v);
+        const cy = toY(probe.z, v);
+        if (cx >= MARGIN.l && cx <= MARGIN.l + plotW && cy >= MARGIN.t && cy <= MARGIN.t + plotH) {
+          ctx.strokeStyle = 'rgba(34, 211, 238, 0.8)';
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([5, 4]);
+          ctx.beginPath();
+          ctx.moveTo(MARGIN.l, cy);
+          ctx.lineTo(cx, cy);
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(cx, MARGIN.t + plotH);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          // 发光点：外晕 + 亮核
+          ctx.save();
+          ctx.shadowColor = '#22d3ee';
+          ctx.shadowBlur = 18;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(34, 211, 238, 0.55)';
+          ctx.fill();
+          ctx.shadowBlur = 10;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+          ctx.restore();
+          ctx.beginPath();
+          ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+          ctx.strokeStyle = '#22d3ee';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+      }
+    }
+
     // 拖拽/悬停数值提示
     const tip = dragNode
       ? { q: dragNode.q, z: dragNode.z, x: toX(dragNode.q, v), y: toY(dragNode.z, v) }
@@ -584,9 +643,9 @@ export default function PlotCanvas(props: Props) {
     }
 
     ctx.restore();
-  }, [size, vp, points, effectiveCurves, sampled, activeCurve, activeCurveId, deviations, hoverNode, hoverPoint, selectedNode, dragNode, plotW, plotH, toX, toY, canvasRef, showPoints, showNodes, showCurves, showCurveLabels, deviationFail, pointStyle, drawMode, mouse, stroke, backbendIds]);
+  }, [size, vp, points, effectiveCurves, sampled, activeCurve, activeCurveId, deviations, hoverNode, hoverPoint, selectedNode, dragNode, plotW, plotH, toX, toY, canvasRef, showPoints, showNodes, showCurves, showCurveLabels, deviationFail, pointStyle, drawMode, mouse, stroke, backbendIds, probe, probeMode]);
 
-  // 退出绘线模式时丢弃未完成笔划
+  // 退出绘线模式时丢弃未完成笔划；退出探针模式时清除选中标记
   useEffect(() => {
     if (!drawMode && stroke) {
       setStroke(null);
@@ -594,6 +653,9 @@ export default function PlotCanvas(props: Props) {
       strokePxLen.current = 0;
     }
   }, [drawMode, stroke]);
+  useEffect(() => {
+    if (!probeMode) setProbe(null);
+  }, [probeMode]);
 
   // ── 命中检测 ──
   const hitNode = useCallback(
@@ -667,6 +729,17 @@ export default function PlotCanvas(props: Props) {
       return;
     }
 
+    if (probeMode) {
+      // 查读模式：点击关系线 → 发光标记选中位置；点空白 → 清除标记
+      const hit = nearestOnCurve(px, py);
+      if (hit && hit.distPx <= 12) {
+        setProbe({ q: hit.sample.q, z: hit.sample.z, curveId: hit.curve.id });
+      } else {
+        setProbe(null);
+      }
+      return;
+    }
+
     const node = hitNode(px, py);
     if (node) {
       dragRef.current = { kind: 'node', nodeId: node.id, startX: px, startY: py, vp0: { ...vpRef.current }, moved: false };
@@ -719,7 +792,7 @@ export default function PlotCanvas(props: Props) {
     setHoverNode(node?.id ?? null);
     const pt = node ? null : hitPoint(px, py);
     setHoverPoint(pt?.id ?? null);
-    setCursor(drawMode ? 'crosshair' : node ? 'move' : 'default');
+    setCursor(drawMode || probeMode ? 'crosshair' : node ? 'move' : 'default');
   };
 
   const onPointerUp = () => {
@@ -750,7 +823,7 @@ export default function PlotCanvas(props: Props) {
   };
 
   const onDoubleClick = (e: React.MouseEvent) => {
-    if (drawMode) return; // 绘线模式下单击即加点，双击不再重复
+    if (drawMode || probeMode) return; // 绘线模式下单击即加点；查读模式下双击不加点
     const [px, py] = eventPos(e);
     if (px < MARGIN.l || px > MARGIN.l + plotW || py < MARGIN.t || py > MARGIN.t + plotH) return;
     if (!activeCurve) return;
@@ -778,6 +851,32 @@ export default function PlotCanvas(props: Props) {
           if (d < bestD) {
             bestD = d;
             best = c;
+          }
+        }
+      }
+      return best;
+    },
+    [effectiveCurves, sampled, toX, toY, showCurves]
+  );
+
+  /** 探针精确定位：返回距 (px,py) 最近的曲线采样点 */
+  const nearestOnCurve = useCallback(
+    (px: number, py: number): { curve: Curve; sample: XY; distPx: number } | null => {
+      if (!showCurves) return null;
+      const v = vpRef.current;
+      let best: { curve: Curve; sample: XY; distPx: number } | null = null;
+      let bestD = Infinity;
+      for (const c of effectiveCurves) {
+        if (!c.visible) continue;
+        const samples = sampled.get(c.id);
+        if (!samples) continue;
+        for (let i = 0; i < samples.length; i++) {
+          const dx = toX(samples[i].q, v) - px;
+          const dy = toY(samples[i].z, v) - py;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d < bestD) {
+            bestD = d;
+            best = { curve: c, sample: samples[i], distPx: d };
           }
         }
       }
@@ -834,6 +933,11 @@ export default function PlotCanvas(props: Props) {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (probeMode && probe && e.key === 'Enter') {
+        e.preventDefault();
+        props.onProbeAddNode(probe.curveId, probe.q, probe.z);
+        return;
+      }
       if (drawMode && e.key === 'Backspace' && activeCurve && activeCurve.nodes.length > 0) {
         const nodes = activeCurve.nodes;
         const last =
@@ -850,7 +954,7 @@ export default function PlotCanvas(props: Props) {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [selectedNode, activeCurve, drawMode, props]);
+  }, [selectedNode, activeCurve, drawMode, probeMode, probe, props]);
 
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-white">
@@ -867,10 +971,12 @@ export default function PlotCanvas(props: Props) {
         className="touch-none select-none"
       />
       <div className="pointer-events-none absolute bottom-12 left-20 rounded bg-slate-800/75 px-2 py-1 text-[10px] leading-4 text-white">
-        滚轮缩放 · 拖拽空白平移 · 双击加节点 · 拖拽节点微调 · 右键改样式 · Delete 删节点
+        {probeMode
+          ? '查读模式：移动实时读数 · 点击关系线选定位置 · Enter/按钮在标记处加节点 · 点击空白清除 · Esc 退出'
+          : '滚轮缩放 · 拖拽空白平移 · 双击加节点 · 拖拽节点微调 · 右键改样式 · Delete 删节点'}
       </div>
-      {/* CAD 式坐标状态栏 */}
-      {mouse && mouse.px > MARGIN.l && mouse.px < MARGIN.l + plotW && mouse.py > MARGIN.t && mouse.py < MARGIN.t + plotH && (
+      {/* CAD 式坐标状态栏（查读模式下由发光读数替代） */}
+      {!probeMode && mouse && mouse.px > MARGIN.l && mouse.px < MARGIN.l + plotW && mouse.py > MARGIN.t && mouse.py < MARGIN.t + plotH && (
         <div className="pointer-events-none absolute bottom-2 right-6 rounded bg-slate-800/85 px-2.5 py-1 font-mono text-[11px] text-white">
           Z = {fromY(mouse.py, vp).toFixed(3)} m　　Q = {fromX(mouse.px, vp).toFixed(2)} m³/s
         </div>
@@ -878,6 +984,61 @@ export default function PlotCanvas(props: Props) {
       {drawMode && (
         <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded bg-rose-600/90 px-3 py-1 text-xs text-white shadow">
           绘制模式：单击逐点加点 · 按住拖动 = 手绘整根线 · Shift+拖动平移 · Backspace 撤点 · 右键/Esc 结束
+        </div>
+      )}
+      {/* 查读探针：跟随光标的发光读数 */}
+      {probeMode &&
+        mouse &&
+        mouse.px > MARGIN.l &&
+        mouse.px < MARGIN.l + plotW &&
+        mouse.py > MARGIN.t &&
+        mouse.py < MARGIN.t + plotH && (
+          <div
+            className="pointer-events-none absolute z-10 whitespace-nowrap rounded-md px-2.5 py-1 font-mono text-[13px] font-bold leading-5"
+            style={{
+              left: Math.min(Math.max(mouse.px + 16, 4), Math.max(4, size.w - 210)),
+              top: Math.max(mouse.py - 48, 4),
+              color: '#67e8f9',
+              background: 'rgba(8, 30, 44, 0.85)',
+              border: '1px solid rgba(34, 211, 238, 0.5)',
+              textShadow: '0 0 8px rgba(34,211,238,0.95), 0 0 18px rgba(34,211,238,0.6)',
+              boxShadow: '0 0 14px rgba(34,211,238,0.35)',
+            }}
+          >
+            Z = {fromY(mouse.py, vp).toFixed(3)} m　　Q = {fromX(mouse.px, vp).toFixed(2)} m³/s
+          </div>
+        )}
+      {/* 查读探针：选中线上点的操作芯片（可在此加节点） */}
+      {probeMode && probe && (
+        <div
+          className="absolute z-10 flex items-center gap-2 rounded-lg border border-cyan-400/60 bg-slate-900/90 px-2.5 py-1.5"
+          style={{
+            left: Math.min(Math.max(toX(probe.q, vp) + 14, 4), Math.max(4, size.w - 240)),
+            top: Math.max(toY(probe.z, vp) - 52, 4),
+            boxShadow: '0 0 14px rgba(34,211,238,0.4)',
+          }}
+        >
+          <div
+            className="whitespace-nowrap font-mono text-[12px] font-bold leading-4 text-cyan-300"
+            style={{ textShadow: '0 0 8px rgba(34,211,238,0.8)' }}
+          >
+            线上 Z = {probe.z.toFixed(3)} m
+            <br />Q = {probe.q.toFixed(2)} m³/s
+          </div>
+          <button
+            className="rounded bg-cyan-500 px-2 py-1 text-[11px] font-medium text-slate-900 hover:bg-cyan-400"
+            title="在发光标记处插入节点（快捷键 Enter）"
+            onClick={() => props.onProbeAddNode(probe.curveId, probe.q, probe.z)}
+          >
+            ＋加节点
+          </button>
+          <button
+            className="rounded px-1 text-[11px] text-slate-400 hover:text-white"
+            title="清除标记（点击空白处也可清除）"
+            onClick={() => setProbe(null)}
+          >
+            ✕
+          </button>
         </div>
       )}
       {menu && (

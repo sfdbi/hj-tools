@@ -2,6 +2,7 @@
 import type { Curve, CurveType, DataPoint } from '@/types';
 import { CURVE_TYPE_LABEL } from '@/types';
 import type { FitOptions } from '@/lib/fitting';
+import { downloadFile } from '@/lib/csv';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useState } from 'react';
@@ -40,6 +41,19 @@ export default function CurvePanel(props: Props) {
   };
 
   const canFit = !!activeCurveId && points.length >= 3;
+
+  /** 导出全部曲线节点为 CSV（绳套按添加顺序，其余按水位升序） */
+  const exportNodes = () => {
+    const rows: string[] = ['曲线线号,曲线类型,节点序号,水位Z(m),流量Q(m³/s)'];
+    for (const c of curves) {
+      const nodes = c.type === 'loop' ? c.nodes : [...c.nodes].sort((a, b) => a.z - b.z);
+      nodes.forEach((n, i) => {
+        rows.push(`${c.name},${CURVE_TYPE_LABEL[c.type]},${i + 1},${n.z.toFixed(3)},${n.q.toFixed(3)}`);
+      });
+    }
+    downloadFile('曲线节点数据.csv', rows.join('\r\n'));
+  };
+  const totalNodes = curves.reduce((s, c) => s + c.nodes.length, 0);
 
   return (
     <ScrollArea className="h-full">
@@ -97,7 +111,19 @@ export default function CurvePanel(props: Props) {
 
         {/* 曲线列表 */}
         <div className="rounded-lg border p-3">
-          <div className="mb-2 text-sm font-semibold text-slate-700">曲线列表（{curves.length}）</div>
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-sm font-semibold text-slate-700">曲线列表（{curves.length}）</div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs"
+              disabled={totalNodes === 0}
+              onClick={exportNodes}
+              title="导出全部曲线的节点数据为 CSV（含线号、类型、序号、水位、流量）"
+            >
+              ⬇ 导出节点
+            </Button>
+          </div>
           {curves.length === 0 && (
             <div className="py-3 text-center text-xs text-slate-400">暂无曲线</div>
           )}

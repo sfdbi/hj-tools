@@ -19,6 +19,7 @@ export default function RatingTool() {
   const { state, api, activeCurve } = useAppStore();
   const [tab, setTab] = useState<TabKey>('data');
   const [resetSignal, setResetSignal] = useState(0);
+  const [probeMode, setProbeMode] = useState(false); // 查读探针开关（与绘线互斥）
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // ── 三性检验（实时）──
@@ -52,13 +53,14 @@ export default function RatingTool() {
       } else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
         e.preventDefault();
         api.redo();
-      } else if (e.key === 'Escape' && state.drawMode) {
-        api.setDrawMode(false);
+      } else if (e.key === 'Escape') {
+        if (state.drawMode) api.setDrawMode(false);
+        if (probeMode) setProbeMode(false);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [api, state.drawMode]);
+  }, [api, state.drawMode, probeMode]);
 
   const handleFit = (curveId: string, opts: FitOptions) => {
     const result = fitCurve(state.points, opts);
@@ -205,11 +207,27 @@ export default function RatingTool() {
           size="sm"
           variant={state.drawMode ? 'default' : 'outline'}
           className="h-8"
-          onClick={() => api.setDrawMode(!state.drawMode)}
+          onClick={() => {
+            if (!state.drawMode) setProbeMode(false); // 绘线与查读互斥
+            api.setDrawMode(!state.drawMode);
+          }}
           disabled={!activeCurve}
           title={activeCurve ? '单击绘图区连续添加节点' : '请先在"曲线"页新建曲线'}
         >
           ✏️ 绘线
+        </Button>
+        <Button
+          size="sm"
+          variant={probeMode ? 'default' : 'outline'}
+          className="h-8"
+          onClick={() => {
+            const next = !probeMode;
+            setProbeMode(next);
+            if (next) api.setDrawMode(false); // 查读与绘线互斥
+          }}
+          title="查读模式：移动实时发光显示水位/流量；点击关系线出现发光标记，可在标记处添加节点（Enter）；Esc 退出"
+        >
+          🔍 查读
         </Button>
         <Button size="sm" variant="outline" className="h-8" onClick={() => setResetSignal((s) => s + 1)}>
           ⛶ 重置视图
@@ -290,6 +308,11 @@ export default function RatingTool() {
               deviationFail={deviationFail}
               pointStyle={state.pointStyle}
               backbendIds={backbendIds}
+              probeMode={probeMode}
+              onProbeAddNode={(cid, q, z) => {
+                api.addNode(cid, q, z);
+                api.setActiveCurve(cid);
+              }}
               onPointStyle={api.setPointStyle}
               onUpdateCurve={api.updateCurve}
               onDeletePoint={api.deletePoint}
