@@ -6,6 +6,7 @@ import type { CurveType } from '@/types';
 import { monotoneCubic, catmullRom, qAtZ } from '@/lib/spline';
 import { computeDeviations, signTest, runTest, deviationTest, type TestResult } from '@/lib/tests';
 import { fitCurve, type FitOptions } from '@/lib/fitting';
+import { findBackbend } from '@/lib/draw';
 import PlotCanvas from '@/components/PlotCanvas';
 import DataPanel from '@/components/DataPanel';
 import TestPanel from '@/components/TestPanel';
@@ -148,6 +149,12 @@ export default function RatingTool() {
     return null;
   }, [activeCurve, state.points]);
 
+  // 反曲检测：单一线/复合曲线的 Q 应随 Z 单调不减
+  const backbendIds = useMemo(() => {
+    if (!activeCurve || activeCurve.type === 'loop') return new Set<string>();
+    return findBackbend(activeCurve.nodes);
+  }, [activeCurve]);
+
   const tabs: { key: TabKey; label: string }[] = [
     { key: 'data', label: '数据' },
     { key: 'curve', label: '曲线' },
@@ -247,6 +254,19 @@ export default function RatingTool() {
       {extensionWarning && (
         <div className="shrink-0 bg-red-50 px-4 py-1.5 text-xs text-red-700">⚠ {extensionWarning}</div>
       )}
+      {backbendIds.size > 0 && (
+        <div className="flex shrink-0 items-center gap-2 bg-orange-50 px-4 py-1.5 text-xs text-orange-700">
+          <span>
+            ⚠ 检测到反曲：{backbendIds.size} 个节点处流量随水位不增（橙色标记），单一水位流量关系线应避免反曲
+          </span>
+          <button
+            onClick={() => activeCurve && api.fixMonotonic(activeCurve.id)}
+            className="rounded border border-orange-300 bg-white px-2 py-0.5 text-orange-700 hover:bg-orange-100"
+          >
+            一键单调修复
+          </button>
+        </div>
+      )}
       {projectMsg && (
         <div className="shrink-0 bg-sky-50 px-4 py-1.5 text-xs text-sky-700">{projectMsg}</div>
       )}
@@ -269,12 +289,14 @@ export default function RatingTool() {
               showCurveLabels={state.showCurveLabels}
               deviationFail={deviationFail}
               pointStyle={state.pointStyle}
+              backbendIds={backbendIds}
               onPointStyle={api.setPointStyle}
               onUpdateCurve={api.updateCurve}
               onDeletePoint={api.deletePoint}
               onDeleteCurve={api.deleteCurve}
               onExitDraw={() => api.setDrawMode(false)}
               onAddNode={(q, z) => state.activeCurveId && api.addNode(state.activeCurveId, q, z)}
+              onStroke={(pts) => state.activeCurveId && api.addStroke(state.activeCurveId, pts)}
               onMoveNode={(nodeId, q, z) => state.activeCurveId && api.moveNode(state.activeCurveId, nodeId, q, z)}
               onDeleteNode={(nodeId) => state.activeCurveId && api.deleteNode(state.activeCurveId, nodeId)}
             />

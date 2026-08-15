@@ -1,7 +1,8 @@
 // 全局状态：测点 + 曲线 + 历史（撤销/重做）+ localStorage 持久化
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
-import type { Curve, CurveNode, CurveType, DataPoint, PointStyle } from '@/types';
+import type { Curve, CurveNode, CurveType, DataPoint, PointStyle, XY } from '@/types';
 import { CURVE_TYPE_LABEL } from '@/types';
+import { strokeToLoopNodes, strokeToSingleNodes, isotonicIncreasing } from '@/lib/draw';
 
 export interface AppState {
   points: DataPoint[];
@@ -222,6 +223,39 @@ export function useAppStore() {
             c.id === curveId ? { ...c, nodes: c.nodes.filter((n) => n.id !== nodeId) } : c
           )
         ),
+      /** 手绘笔划提交：整笔一次进入历史（可一步撤销） */
+      addStroke: (curveId: string, stroke: XY[]) => {
+        const curve = state.curves.find((c) => c.id === curveId);
+        if (!curve || stroke.length < 2) return;
+        const qs = stroke.map((p) => p.q);
+        const zs = stroke.map((p) => p.z);
+        const rangeHint = Math.max(
+          Math.max(...qs) - Math.min(...qs),
+          Math.max(...zs) - Math.min(...zs)
+        );
+        const nodes =
+          curve.type === 'loop'
+            ? [...curve.nodes, ...strokeToLoopNodes(stroke, rangeHint)]
+            : strokeToSingleNodes(stroke, curve.nodes);
+        commit(
+          undefined,
+          state.curves.map((c) =>
+            c.id === curveId ? { ...c, nodes, fitLabel: '手绘定线' } : c
+          )
+        );
+      },
+      /** 一键单调修复：消除单一线/复合曲线的反曲（PAVA 等值回归） */
+      fixMonotonic: (curveId: string) => {
+        const curve = state.curves.find((c) => c.id === curveId);
+        if (!curve || curve.type === 'loop') return;
+        const sorted = [...curve.nodes].sort((a, b) => a.z - b.z);
+        const fixed = isotonicIncreasing(sorted.map((n) => n.q));
+        const nodes = sorted.map((n, i) => ({ ...n, q: round3(Math.max(0, fixed[i])) }));
+        commit(
+          undefined,
+          state.curves.map((c) => (c.id === curveId ? { ...c, nodes } : c))
+        );
+      },
       setActiveCurve: (id: string | null) => dispatch({ type: 'setActiveCurve', id }),
       setDrawMode: (on: boolean) => dispatch({ type: 'setDrawMode', on }),
       setShowPoints: (on: boolean) => dispatch({ type: 'setShow', key: 'showPoints', on }),

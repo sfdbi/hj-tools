@@ -86,7 +86,9 @@ interface Props {
   showCurveLabels: boolean;
   deviationFail: boolean; // 偏离检验不通过时在图上标注大偏差点
   pointStyle: PointStyle;
+  backbendIds: Set<string>; // 反曲节点（橙色高亮）
   onAddNode: (q: number, z: number) => void;
+  onStroke: (pts: XY[]) => void; // 手绘整笔提交
   onMoveNode: (nodeId: string, q: number, z: number) => void;
   onDeleteNode: (nodeId: string) => void;
   onDeletePoint: (id: string) => void;
@@ -100,9 +102,11 @@ const MARGIN = { l: 68, r: 20, t: 16, b: 46 };
 const NODE_HIT = 10;
 
 export default function PlotCanvas(props: Props) {
-  const { points, curves, activeCurveId, drawMode, deviations, resetSignal, canvasRef, showPoints, showNodes, showCurves, showCurveLabels, deviationFail, pointStyle } = props;
+  const { points, curves, activeCurveId, drawMode, deviations, resetSignal, canvasRef, showPoints, showNodes, showCurves, showCurveLabels, deviationFail, pointStyle, backbendIds } = props;
   const [menu, setMenu] = useState<{ target: MenuTarget; x: number; y: number } | null>(null);
   const [mouse, setMouse] = useState<{ px: number; py: number } | null>(null); // CAD 式光标跟踪
+  const [stroke, setStroke] = useState<XY[] | null>(null); // 手绘进行中的笔划（数据坐标）
+  const strokePxLen = useRef(0); // 笔划像素长度（区分单击与手绘）
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [vp, setVp] = useState<Viewport>({ x0: 0, x1: 10, y0: 0, y1: 10 });
@@ -478,12 +482,13 @@ export default function PlotCanvas(props: Props) {
         const y = toY(pos.z, v);
         const hovered = hoverNode === n.id;
         const selected = selectedNode === n.id;
+        const isBackbend = backbendIds.has(n.id); // 反曲节点：橙色警示
         const r = hovered || selected ? nSize + 1.3 : nSize;
-        drawMarker(ctx, nShape, x, y, r, selected ? '#facc15' : nColor);
-        if (hovered || selected) {
+        drawMarker(ctx, nShape, x, y, r, isBackbend ? '#f97316' : selected ? '#facc15' : nColor);
+        if (hovered || selected || isBackbend) {
           ctx.beginPath();
           ctx.arc(x, y, r + 2.5, 0, Math.PI * 2);
-          ctx.strokeStyle = selected ? '#a16207' : nColor;
+          ctx.strokeStyle = isBackbend ? '#ea580c' : selected ? '#a16207' : nColor;
           ctx.lineWidth = 1.2;
           ctx.stroke();
         }
@@ -497,8 +502,8 @@ export default function PlotCanvas(props: Props) {
       });
     }
 
-    // 绘制模式：CAD 式橡皮筋预览（最后节点 → 光标）
-    if (drawMode && activeCurve && mouse) {
+    // 绘制模式：CAD 式橡皮筋预览（最后节点 → 光标，手绘中不显示）
+    if (drawMode && activeCurve && mouse && !stroke) {
       const nodes = activeCurve.nodes;
       if (nodes.length > 0) {
         const last =
@@ -531,6 +536,29 @@ export default function PlotCanvas(props: Props) {
       }
     }
 
+    // 手绘进行中的笔划（实线预览 + 采样点）
+    if (stroke && stroke.length > 1 && activeCurve) {
+      ctx.strokeStyle = activeCurve.color;
+      ctx.lineWidth = 1.8;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.moveTo(toX(stroke[0].q, v), toY(stroke[0].z, v));
+      for (let i = 1; i < stroke.length; i++) {
+        ctx.lineTo(toX(stroke[i].q, v), toY(stroke[i].z, v));
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      // 起终点标记
+      ctx.fillStyle = activeCurve.color;
+      ctx.beginPath();
+      ctx.arc(toX(stroke[0].q, v), toY(stroke[0].z, v), 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      const last = stroke[stroke.length - 1];
+      ctx.beginPath();
+      ctx.arc(toX(last.q, v), toY(last.z, v), 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     // 拖拽/悬停数值提示
     const tip = dragNode
       ? { q: dragNode.q, z: dragNode.z, x: toX(dragNode.q, v), y: toY(dragNode.z, v) }
@@ -556,7 +584,16 @@ export default function PlotCanvas(props: Props) {
     }
 
     ctx.restore();
-  }, [size, vp, points, effectiveCurves, sampled, activeCurve, activeCurveId, deviations, hoverNode, hoverPoint, selectedNode, dragNode, plotW, plotH, toX, toY, canvasRef, showPoints, showNodes, showCurves, showCurveLabels, deviationFail, pointStyle, drawMode, mouse]);
+  }, [size, vp, points, effectiveCurves, sampled, activeCurve, activeCurveId, deviations, hoverNode, hoverPoint, selectedNode, dragNode, plotW, plotH, toX, toY, canvasRef, showPoints, showNodes, showCurves, showCurveLabels, deviationFail, pointStyle, drawMode, mouse, stroke, backbendIds]);
+
+  // 退出绘线模式时丢弃未完成笔划
+  useEffect(() => {
+    if (!drawMode && stroke) {
+      setStroke(null);
+      lastStrokePx.current = null;
+      strokePxLen.current = 0;
+    }
+  }, [drawMode, stroke]);
 
   // ── 命中检测 ──
   const hitNode = useCallback(
@@ -596,6 +633,20 @@ export default function PlotCanvas(props: Props) {
   };
 
   // ── 交互 ──
+  /** 距既有节点过近（<6px）时拒绝重复加点，避免样条退化 */
+  const nearExistingNode = useCallback(
+    (px: number, py: number): boolean => {
+      if (!activeCurve) return false;
+      const v = vpRef.current;
+      return activeCurve.nodes.some((n) => {
+        const dx = toX(n.q, v) - px;
+        const dy = toY(n.z, v) - py;
+        return dx * dx + dy * dy < 36;
+      });
+    },
+    [activeCurve, toX, toY]
+  );
+
   const onPointerDown = (e: React.PointerEvent) => {
     setMenu(null); // 点击画布任意处关闭右键菜单
     if (e.button === 2) return; // 右键在 contextmenu 处理
@@ -603,9 +654,15 @@ export default function PlotCanvas(props: Props) {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
 
     if (drawMode) {
-      // 绘制模式：单击加节点
+      // Shift+拖动 = 平移；否则开始手绘笔划（松开时不足 8px 视为单击加点）
+      if (e.shiftKey) {
+        dragRef.current = { kind: 'pan', startX: px, startY: py, vp0: { ...vpRef.current }, moved: false };
+        setCursor('grabbing');
+        return;
+      }
       if (px > MARGIN.l && px < MARGIN.l + plotW && py > MARGIN.t && py < MARGIN.t + plotH) {
-        props.onAddNode(fromX(px, vpRef.current), fromY(py, vpRef.current));
+        strokePxLen.current = 0;
+        setStroke([{ q: fromX(px, vpRef.current), z: fromY(py, vpRef.current) }]);
       }
       return;
     }
@@ -622,9 +679,25 @@ export default function PlotCanvas(props: Props) {
     setCursor('grabbing');
   };
 
+  const lastStrokePx = useRef<{ px: number; py: number } | null>(null);
+
   const onPointerMove = (e: React.PointerEvent) => {
     const [px, py] = eventPos(e);
     setMouse({ px, py });
+
+    // 手绘笔划采样（像素间距 ≥4px 才记点）
+    if (stroke) {
+      const last = lastStrokePx.current;
+      if (!last || Math.hypot(px - last.px, py - last.py) >= 4) {
+        strokePxLen.current += last ? Math.hypot(px - last.px, py - last.py) : 0;
+        lastStrokePx.current = { px, py };
+        const cx = Math.max(MARGIN.l, Math.min(MARGIN.l + plotW, px));
+        const cy = Math.max(MARGIN.t, Math.min(MARGIN.t + plotH, py));
+        setStroke([...stroke, { q: fromX(cx, vpRef.current), z: fromY(cy, vpRef.current) }]);
+      }
+      return;
+    }
+
     const drag = dragRef.current;
     if (drag?.kind === 'node' && dragNode) {
       const q = fromX(px, vpRef.current);
@@ -650,6 +723,23 @@ export default function PlotCanvas(props: Props) {
   };
 
   const onPointerUp = () => {
+    // 手绘笔划结束
+    if (stroke) {
+      const isClick = strokePxLen.current < 8 || stroke.length < 2;
+      if (isClick) {
+        // 单击加点（CAD 多段线式），距既有节点过近则忽略
+        const p = stroke[0];
+        const px = toX(p.q, vpRef.current);
+        const py = toY(p.z, vpRef.current);
+        if (!nearExistingNode(px, py)) props.onAddNode(p.q, p.z);
+      } else if (stroke.length >= 3) {
+        props.onStroke(stroke); // 整笔一次提交（一步撤销）
+      }
+      setStroke(null);
+      lastStrokePx.current = null;
+      strokePxLen.current = 0;
+      return;
+    }
     const drag = dragRef.current;
     if (drag?.kind === 'node' && dragNode && drag.moved) {
       props.onMoveNode(dragNode.id, dragNode.q, dragNode.z);
@@ -660,11 +750,12 @@ export default function PlotCanvas(props: Props) {
   };
 
   const onDoubleClick = (e: React.MouseEvent) => {
+    if (drawMode) return; // 绘线模式下单击即加点，双击不再重复
     const [px, py] = eventPos(e);
     if (px < MARGIN.l || px > MARGIN.l + plotW || py < MARGIN.t || py > MARGIN.t + plotH) return;
     if (!activeCurve) return;
-    // 双击空白：向活动曲线插入节点
-    if (!hitNode(px, py)) {
+    // 双击空白：向活动曲线插入节点（距既有节点过近则忽略）
+    if (!hitNode(px, py) && !nearExistingNode(px, py)) {
       props.onAddNode(fromX(px, vpRef.current), fromY(py, vpRef.current));
     }
   };
@@ -786,7 +877,7 @@ export default function PlotCanvas(props: Props) {
       )}
       {drawMode && (
         <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded bg-rose-600/90 px-3 py-1 text-xs text-white shadow">
-          绘制模式：单击指定下一点 · Backspace 撤销上一点 · 右键或 Esc 结束绘线
+          绘制模式：单击逐点加点 · 按住拖动 = 手绘整根线 · Shift+拖动平移 · Backspace 撤点 · 右键/Esc 结束
         </div>
       )}
       {menu && (
