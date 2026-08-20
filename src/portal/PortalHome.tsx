@@ -21,6 +21,14 @@ const TOOLS: ToolCard[] = [
     path: '/rating-curve',
     tags: ['水文整编', '定线', '三性检验'],
   },
+  {
+    key: 'flow-discharge',
+    name: '河道断面流量计算',
+    desc: '流速-面积法推流：一/二/三/五/六点法系数标定、现场速测直接输水深、部分面积双算法、成果图交互查看与 Excel 成果表一键导出。',
+    icon: '🌊',
+    path: '/flow-discharge',
+    tags: ['流量测验', '推流', '成果导出'],
+  },
   // 预留窗口：后续工具在此追加
   { key: 'slot-2', name: '预留工具窗口', desc: '后续工具将部署于此，敬请期待。', icon: '🧰' },
   { key: 'slot-3', name: '预留工具窗口', desc: '后续工具将部署于此，敬请期待。', icon: '📊' },

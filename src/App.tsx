@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router';
 import PasswordGate from '@/portal/PasswordGate';
 import PortalHome from '@/portal/PortalHome';
 import RatingTool from '@/tools/rating/RatingTool';
+import FlowTool from '@/tools/flow/FlowTool';
 
 export default function App() {
   return (
@@ -10,6 +11,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<PortalHome />} />
         <Route path="/rating-curve" element={<RatingTool />} />
+        <Route path="/flow-discharge" element={<FlowTool />} />
         <Route path="*" element={<PortalHome />} />
       </Routes>
     </PasswordGate>
