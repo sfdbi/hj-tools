@@ -343,15 +343,25 @@ footer.foot{text-align:center;font-size:11px;color:#9db0c2;padding:16px 0 26px;}
 const PWD_HASH = 'f7363f31b073e49a678b4bd5a59d69f8ecf9ad66d111b90cc52f1beae1dedcc7'; // SHA-256(工具独立密码)
 const AUTH_KEY = 'hj-att-auth', ME_KEY = 'hj-att-name', NAMES_KEY = 'hj-att-names', LC_KEY = 'hj-att-lc';
 const STATUSES = [
-  {k:'出勤',   c:'#22a06b'},
-  {k:'出差',   c:'#2f7fd0'},
-  {k:'加班',   c:'#e08a1e'},
-  {k:'调休',   c:'#8a63d2'},
-  {k:'正常休假',c:'#1fa8a0'},
-  {k:'病假',   c:'#d9534f'},
-  {k:'事假',   c:'#c9a227'},
+  {k:'出勤', sym:'√', c:'#22a06b'},
+  {k:'加班', sym:'J', c:'#e08a1e'},
+  {k:'驻测', sym:'Z', c:'#2f7fd0'},
+  {k:'出工', sym:'C', c:'#17a2b8'},
+  {k:'公休', sym:'O', c:'#1fa8a0'},
+  {k:'调休', sym:'T', c:'#8a63d2'},
+  {k:'病假', sym:'V', c:'#d9534f'},
+  {k:'事假', sym:'#', c:'#c9a227'},
+  {k:'年休', sym:'N', c:'#6c9f3f'},
+  {k:'婚丧', sym:'S', c:'#7d6b5d'},
+  {k:'工伤', sym:'G', c:'#b0413e'},
+  {k:'旷工', sym:'X', c:'#3a4657'},
+  {k:'产假', sym:'H', c:'#d06fa0'},
+  {k:'护理', sym:'M', c:'#a076c9'},
+  {k:'出差', sym:'E', c:'#1f6fb2'},
 ];
+const LEGACY_SYM = {'正常休假':'O'}; // 旧版状态兼容
 const stColor = k => (STATUSES.find(s=>s.k===k)||{c:'#9db4c9'}).c;
+const stSym = k => (STATUSES.find(s=>s.k===k)||{}).sym || LEGACY_SYM[k] || '?';
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2,'0');
 const todayStr = () => { const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); };
@@ -615,7 +625,7 @@ function renderCalendar(records){
     for(let d=1; d<=days; d++){
       const ds = y+'-'+pad(m)+'-'+pad(d);
       const r = (byName[n]||{})[ds];
-      const dots = r ? r.statuses.map(s=>'<span class="dot" style="background:'+stColor(s)+'"></span>').join('') : '';
+      const dots = r ? r.statuses.map(s=>'<span style="color:'+stColor(s)+';font-weight:700;font-size:13px;line-height:1">'+stSym(s)+'</span>').join('') : '';
       const wd2 = r && r.work ? '<span class="wdot"></span>' : '';
       h += '<td class="cell" data-name="'+esc(n)+'" data-date="'+ds+'">'+wd2+'<div class="dots">'+dots+'</div></td>';
     }
@@ -634,7 +644,7 @@ function renderCalendar(records){
 
 function renderLegend(){
   $('legend').innerHTML = STATUSES.map(s=>
-    '<span><span class="dot" style="background:'+s.c+';width:10px;height:10px"></span>'+s.k+'</span>'
+    '<span><b style="color:'+s.c+'">'+s.sym+'</b> '+s.k+'</span>'
   ).join('') + '<span><span class="wdot" style="position:static;display:inline-block"></span>含工作内容</span>';
 }
 
@@ -653,7 +663,7 @@ function drawChips(){
   $('ckChips').innerHTML = STATUSES.map(s=>{
     const on = ckSel.has(s.k);
     return '<button type="button" class="chip'+(on?' on':'')+'" data-k="'+s.k+'"'+
-      (on?' style="background:'+s.c+'"':'')+'>'+s.k+'</button>';
+      (on?' style="background:'+s.c+'"':'')+'><b>'+s.sym+'</b> '+s.k+'</button>';
   }).join('');
   $('ckChips').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
     const k=b.dataset.k; ckSel.has(k)?ckSel.delete(k):ckSel.add(k); drawChips();
@@ -715,7 +725,7 @@ function openSummary(){
   const ms = $('sumMonth'); ms.innerHTML='';
   for(let i=1;i<=12;i++) ms.innerHTML += '<option'+(i===m?' selected':'')+'>'+i+'</option>';
   titleDirty = false;
-  if(!$('expUnit').value) $('expUnit').value = '汉江局技术管理室';
+  if(!$('expUnit').value) $('expUnit').value = '技术管理室';
   if(!$('expDate').value) $('expDate').value = todayStr();
   show('sumMask'); buildSummary();
 }
@@ -738,7 +748,10 @@ async function buildSummary(){
   const days = new Date(+ym.slice(0,4), +ym.slice(5,7), 0).getDate();
   sumData = {ym, names, days, recs};
   sumSel = new Set(names);
-  if(!titleDirty) $('expTitle').value = '汉江局技术管理室 '+ym.replace('-','年')+'月 考勤汇总表';
+  if(!titleDirty){
+    const [yy,mm] = ym.split('-');
+    $('expTitle').value = '汉江局 '+yy+' 年 '+(+mm)+' 月职工考勤表';
+  }
   renderSumChips();
   renderSumCards();
 }
@@ -775,7 +788,7 @@ function renderSumCards(){
       '<span class="pd">打卡 '+mine.length+' 天</span></div>';
     h += '<div class="st-row">'+STATUSES.map(s=>{
       const c = cnt(s.k);
-      return c ? '<span class="st-badge" style="background:'+s.c+'">'+s.k+' '+c+'</span>' : '';
+      return c ? '<span class="st-badge" style="background:'+s.c+'">'+s.sym+' '+s.k+' '+c+'</span>' : '';
     }).join('')+'</div>';
     h += '<div class="wk">'+mine.map(r=>
       '<div class="work-line"><span class="d">'+r.date.slice(5).replace('-','/')+'</span>'+
@@ -802,32 +815,59 @@ function getExport(){
   };
 }
 
-/* ── Excel 导出（SpreadsheetML .xls，双工作表，版式对标 PDF）── */
+/* ── Excel 导出（SpreadsheetML .xls，版式对标《职工考勤统计表》样表）── */
 $('expExcel').onclick = ()=>{
   const E = getExport(); if(!E) return;
-  const xesc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const C = (v,st,merge) => '<Cell'+(st?' ss:StyleID="'+st+'"':'')+(merge?' ss:MergeAcross="'+merge+'"':'')+
+  const xesc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'&#10;');
+  // merge: [向右跨, 向下跨]；idx: 显式列号（被纵向合并覆盖时需跳列）
+  const C = (v,st,mg,idx) => '<Cell'+(idx?' ss:Index="'+idx+'"':'')+(st?' ss:StyleID="'+st+'"':'')+
+    (mg?((mg[0]?' ss:MergeAcross="'+mg[0]+'"':'')+(mg[1]?' ss:MergeDown="'+mg[1]+'"':'')):'')+
     '><Data ss:Type="'+(typeof v==='number'?'Number':'String')+'">'+xesc(v)+'</Data></Cell>';
-  const MCOL = STATUSES.length + 2; // 统计表总列数-1 = 合并跨度
+  const yr = E.ym.slice(0,4), mo = +E.ym.slice(5,7);
+  const daysInMonth = new Date(+yr, mo, 0).getDate();
+  const TITLE = E.title || ('汉江局   '+yr+'   年    '+mo+'    月职工考勤表');
 
-  // ── 工作表1：考勤统计 ──
-  let s1 = '<Row ss:Height="32">'+C(E.title,'title',MCOL)+'</Row>';
-  s1 += '<Row ss:Height="20">'+C('单位：'+E.unit+'　　填表日期：'+E.date,'meta',MCOL)+'</Row>';
-  if(E.note) s1 += '<Row ss:Height="20">'+C('备注：'+E.note,'meta',MCOL)+'</Row>';
-  s1 += '<Row ss:Height="8"></Row>';
-  s1 += '<Row ss:Height="24">'+['序号','姓名','打卡天数',...STATUSES.map(s=>s.k)].map(v=>C(v,'h')).join('')+'</Row>';
+  // ── 主表（样表版式：A序号 B姓名 C出勤总天数 D~R十五类统计 S~AW日期1~31 AX履职评价）──
+  let s1 = '';
+  s1 += '<Row ss:Height="34">'+C(TITLE,'title',[49,0])+'</Row>';
+  s1 += '<Row ss:Height="22">'+C('单位（部门）：'+E.unit,'unitl',[49,0])+'</Row>';
+  // 表头第1行
+  s1 += '<Row ss:Height="20">'+C('序号','h',[0,1])+C('姓名','h',[0,1])+C('','h',[15,0])+
+    C('日期','h',[30,0])+C('月度履职评价\n（称职、不称职、未履职）','h',[0,1])+'</Row>';
+  // 表头第2行：A、B、AX 三列被上一行纵向合并覆盖，首格须显式跳到第3列
+  s1 += '<Row ss:Height="34">'+C('出勤\n总天数','h',null,3)+
+    STATUSES.map(s=>C(s.sym+s.k,'h')).join('')+
+    Array.from({length:31},(_,i)=>C(i+1,'h')).join('')+'</Row>';
+  // 数据行
   E.sel.forEach((n,i)=>{
     const mine = E.recs.filter(r=>r.name===n);
     const cnt = k => mine.filter(r=>r.statuses.includes(k)).length;
+    const byDay = {};
+    mine.forEach(r=>{ byDay[+r.date.slice(8,10)] = r.statuses.map(stSym).join('+'); });
     s1 += '<Row ss:Height="22">'+C(i+1,'b')+C(n,'b')+C(mine.length,'b')+
-      STATUSES.map(s=>C(cnt(s.k)||'','b')).join('')+'</Row>';
+      STATUSES.map(s=>C(cnt(s.k)||'','b')).join('')+
+      Array.from({length:31},(_,d)=>{
+        const v = d+1<=daysInMonth ? (byDay[d+1]||'') : '';
+        return C(v,'b');
+      }).join('')+C('','b')+'</Row>';
   });
-  const ws1 = '<Worksheet ss:Name="考勤统计"><Table>'+
-    '<Column ss:Width="42"/><Column ss:Width="90"/><Column ss:Width="70"/>'+
-    STATUSES.map(()=>'<Column ss:Width="62"/>').join('')+ s1 +'</Table></Worksheet>';
+  // 备注图例行（与样表一致：名称占两格 + 符号一格）
+  s1 += '<Row ss:Height="8"></Row>';
+  let legend = C('','b0')+C('备注：','lg')+C('','b0');
+  STATUSES.forEach(s=>{ legend += C(' '+s.k,'lg',[1,0])+C(s.sym,'lgc'); });
+  s1 += '<Row ss:Height="20">'+legend+'</Row>';
+  // 签字行
+  s1 += '<Row ss:Height="24">'+C('部门负责人：　　　　审核：　　　　填表人：　　　　填表日期：'+E.date,'unitl',[49,0])+'</Row>';
+  if(E.note) s1 += '<Row ss:Height="20">'+C('备注：'+E.note,'unitl',[49,0])+'</Row>';
 
-  // ── 工作表2：每日明细（按人整块排列）──
-  let s2 = '<Row ss:Height="32">'+C('每日工作内容明细','title',4)+'</Row>';
+  const cols1 = '<Column ss:Width="36"/><Column ss:Width="72"/><Column ss:Width="46"/>'+
+    STATUSES.map(()=>'<Column ss:Width="40"/>').join('')+
+    Array.from({length:31},()=>'<Column ss:Width="26"/>').join('')+
+    '<Column ss:Width="120"/>';
+  const ws1 = '<Worksheet ss:Name="'+mo+'月"><Table>'+cols1+s1+'</Table></Worksheet>';
+
+  // ── 工作表2：每日工作内容明细（按人整块排列）──
+  let s2 = '<Row ss:Height="32">'+C('每日工作内容明细','title',[4,0])+'</Row>';
   s2 += '<Row ss:Height="24">'+['序号','姓名','日期','状态','工作内容'].map(v=>C(v,'h')).join('')+'</Row>';
   E.sel.forEach((n,i)=>{
     E.recs.filter(r=>r.name===n).sort((a,b)=>a.date<b.date?-1:1).forEach(r=>{
@@ -839,21 +879,21 @@ $('expExcel').onclick = ()=>{
     '<Column ss:Width="42"/><Column ss:Width="90"/><Column ss:Width="95"/><Column ss:Width="140"/><Column ss:Width="320"/>'+
     s2 +'</Table></Worksheet>';
 
+  const BORDERS = '<Borders>'+
+    '<Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>'+
+    '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders>';
   const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n'+
     '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'+
     '<Styles>'+
-    '<Style ss:ID="title"><Font ss:Bold="1" ss:Size="16"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style>'+
-    '<Style ss:ID="meta"><Font ss:Size="10" ss:Color="#55687A"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style>'+
-    '<Style ss:ID="h"><Font ss:Bold="1"/><Interior ss:Color="#DCE9F7" ss:Pattern="Solid"/>'+
-    '<Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Borders>'+
-    '<Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>'+
-    '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'+
-    '<Style ss:ID="b"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Borders>'+
-    '<Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>'+
-    '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'+
-    '<Style ss:ID="bl"><Alignment ss:Horizontal="Left" ss:Vertical="Center" ss:WrapText="1"/><Borders>'+
-    '<Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>'+
-    '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'+
+    '<Style ss:ID="title"><Font ss:Bold="1" ss:Size="16" ss:FontName="宋体"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style>'+
+    '<Style ss:ID="unitl"><Font ss:Size="11" ss:FontName="宋体"/><Alignment ss:Horizontal="Left" ss:Vertical="Center"/></Style>'+
+    '<Style ss:ID="h"><Font ss:Bold="1" ss:Size="10" ss:FontName="宋体"/><Interior ss:Color="#F2F2F2" ss:Pattern="Solid"/>'+
+    '<Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>'+BORDERS+'</Style>'+
+    '<Style ss:ID="b"><Font ss:Size="10" ss:FontName="宋体"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/>'+BORDERS+'</Style>'+
+    '<Style ss:ID="bl"><Font ss:Size="10" ss:FontName="宋体"/><Alignment ss:Horizontal="Left" ss:Vertical="Center" ss:WrapText="1"/>'+BORDERS+'</Style>'+
+    '<Style ss:ID="b0"><Font ss:Size="10" ss:FontName="宋体"/></Style>'+
+    '<Style ss:ID="lg"><Font ss:Size="10" ss:FontName="宋体"/><Alignment ss:Horizontal="Right" ss:Vertical="Center"/></Style>'+
+    '<Style ss:ID="lgc"><Font ss:Size="10" ss:FontName="宋体"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style>'+
     '</Styles>'+ ws1 + ws2 +'</Workbook>';
   const blob = new Blob(['﻿'+xml], {type:'application/vnd.ms-excel'});
   dl(blob, E.title+'.xls');
