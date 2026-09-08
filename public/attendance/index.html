@@ -802,42 +802,59 @@ function getExport(){
   };
 }
 
-/* ── Excel 导出（无需外库：SpreadsheetML .xls）── */
+/* ── Excel 导出（SpreadsheetML .xls，双工作表，版式对标 PDF）── */
 $('expExcel').onclick = ()=>{
   const E = getExport(); if(!E) return;
   const xesc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const cell = (v,st) => '<Cell'+(st?' ss:StyleID="'+st+'"':'')+'><Data ss:Type="'+(typeof v==='number'?'Number':'String')+'">'+xesc(v)+'</Data></Cell>';
-  let rows = '';
-  rows += '<Row>'+cell(E.title,'t')+'</Row>';
-  rows += '<Row>'+cell('单位：'+E.unit+'　　填表日期：'+E.date)+'</Row>';
-  if(E.note) rows += '<Row>'+cell('备注：'+E.note)+'</Row>';
-  rows += '<Row></Row>';
-  rows += '<Row>'+['序号','姓名','打卡天数',...STATUSES.map(s=>s.k)].map(v=>cell(v,'h')).join('')+'</Row>';
+  const C = (v,st,merge) => '<Cell'+(st?' ss:StyleID="'+st+'"':'')+(merge?' ss:MergeAcross="'+merge+'"':'')+
+    '><Data ss:Type="'+(typeof v==='number'?'Number':'String')+'">'+xesc(v)+'</Data></Cell>';
+  const MCOL = STATUSES.length + 2; // 统计表总列数-1 = 合并跨度
+
+  // ── 工作表1：考勤统计 ──
+  let s1 = '<Row ss:Height="32">'+C(E.title,'title',MCOL)+'</Row>';
+  s1 += '<Row ss:Height="20">'+C('单位：'+E.unit+'　　填表日期：'+E.date,'meta',MCOL)+'</Row>';
+  if(E.note) s1 += '<Row ss:Height="20">'+C('备注：'+E.note,'meta',MCOL)+'</Row>';
+  s1 += '<Row ss:Height="8"></Row>';
+  s1 += '<Row ss:Height="24">'+['序号','姓名','打卡天数',...STATUSES.map(s=>s.k)].map(v=>C(v,'h')).join('')+'</Row>';
   E.sel.forEach((n,i)=>{
     const mine = E.recs.filter(r=>r.name===n);
     const cnt = k => mine.filter(r=>r.statuses.includes(k)).length;
-    rows += '<Row>'+cell(i+1)+cell(n,'h')+cell(mine.length)+STATUSES.map(s=>cell(cnt(s.k)||'')).join('')+'</Row>';
+    s1 += '<Row ss:Height="22">'+C(i+1,'b')+C(n,'b')+C(mine.length,'b')+
+      STATUSES.map(s=>C(cnt(s.k)||'','b')).join('')+'</Row>';
   });
-  rows += '<Row></Row><Row>'+cell('每日工作内容明细','t')+'</Row>';
+  const ws1 = '<Worksheet ss:Name="考勤统计"><Table>'+
+    '<Column ss:Width="42"/><Column ss:Width="90"/><Column ss:Width="70"/>'+
+    STATUSES.map(()=>'<Column ss:Width="62"/>').join('')+ s1 +'</Table></Worksheet>';
+
+  // ── 工作表2：每日明细（按人整块排列）──
+  let s2 = '<Row ss:Height="32">'+C('每日工作内容明细','title',4)+'</Row>';
+  s2 += '<Row ss:Height="24">'+['序号','姓名','日期','状态','工作内容'].map(v=>C(v,'h')).join('')+'</Row>';
   E.sel.forEach((n,i)=>{
-    const mine = E.recs.filter(r=>r.name===n).sort((a,b)=>a.date<b.date?-1:1);
-    rows += '<Row>'+cell((i+1)+'. '+n+'（打卡 '+mine.length+' 天）','t2')+'</Row>';
-    rows += '<Row>'+['日期','状态','工作内容'].map(v=>cell(v,'h')).join('')+'</Row>';
-    mine.forEach(r=>{ rows += '<Row>'+cell(r.date)+cell(r.statuses.join('、'))+cell(r.work||'')+'</Row>'; });
+    E.recs.filter(r=>r.name===n).sort((a,b)=>a.date<b.date?-1:1).forEach(r=>{
+      s2 += '<Row ss:Height="22">'+C(i+1,'b')+C(n,'b')+C(r.date,'b')+
+        C(r.statuses.join('、'),'b')+C(r.work||'','bl')+'</Row>';
+    });
   });
+  const ws2 = '<Worksheet ss:Name="每日明细"><Table>'+
+    '<Column ss:Width="42"/><Column ss:Width="90"/><Column ss:Width="95"/><Column ss:Width="140"/><Column ss:Width="320"/>'+
+    s2 +'</Table></Worksheet>';
+
   const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n'+
     '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'+
     '<Styles>'+
-    '<Style ss:ID="t"><Font ss:Bold="1" ss:Size="14"/></Style>'+
-    '<Style ss:ID="t2"><Font ss:Bold="1" ss:Size="12"/><Interior ss:Color="#DCE9F7" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="h"><Font ss:Bold="1"/><Interior ss:Color="#EEF3F8" ss:Pattern="Solid"/><Borders>'+
+    '<Style ss:ID="title"><Font ss:Bold="1" ss:Size="16"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style>'+
+    '<Style ss:ID="meta"><Font ss:Size="10" ss:Color="#55687A"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style>'+
+    '<Style ss:ID="h"><Font ss:Bold="1"/><Interior ss:Color="#DCE9F7" ss:Pattern="Solid"/>'+
+    '<Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Borders>'+
     '<Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>'+
     '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'+
-    '<Style ss:ID="Default"><Borders>'+
+    '<Style ss:ID="b"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Borders>'+
     '<Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>'+
     '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'+
-    '</Styles>'+
-    '<Worksheet ss:Name="月考勤汇总"><Table ss:DefaultRowHeight="18">'+rows+'</Table></Worksheet></Workbook>';
+    '<Style ss:ID="bl"><Alignment ss:Horizontal="Left" ss:Vertical="Center" ss:WrapText="1"/><Borders>'+
+    '<Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>'+
+    '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'+
+    '</Styles>'+ ws1 + ws2 +'</Workbook>';
   const blob = new Blob(['﻿'+xml], {type:'application/vnd.ms-excel'});
   dl(blob, E.title+'.xls');
   toast('Excel 已导出');
