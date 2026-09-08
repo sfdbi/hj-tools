@@ -293,8 +293,19 @@ footer.foot{text-align:center;font-size:11px;color:#9db0c2;padding:16px 0 26px;}
         <div><div class="f-label">年份</div><select class="f-input" id="sumYear"></select></div>
         <div><div class="f-label">月份</div><select class="f-input" id="sumMonth"></select></div>
       </div>
+      <div class="f-label" style="display:flex;align-items:center">人员选择（勾选纳入预览与导出）
+        <button id="selAll" style="margin-left:auto;font-size:12px;color:var(--blue);padding:2px 8px">全选 / 全不选</button>
+      </div>
+      <div class="chips" id="sumPersons"></div>
       <div class="f-label">本月总览</div>
       <div class="sum-wrap" id="sumBody"></div>
+      <div class="f-label">导出设置</div>
+      <input class="f-input" id="expTitle" placeholder="表格名称">
+      <div class="row2" style="margin-top:8px">
+        <div><input class="f-input" id="expUnit" placeholder="单位"></div>
+        <div><input class="f-input" id="expDate" type="date" title="填表日期"></div>
+      </div>
+      <textarea class="f-input" id="expNote" style="min-height:52px;margin-top:8px" placeholder="备注（可空）"></textarea>
     </div>
     <div class="mft">
       <button class="btn btn-pri" id="expExcel">导出 Excel</button>
@@ -696,37 +707,71 @@ async function openTaskList(){
 }
 
 /* ═══════════════ 界面⑤：月汇总 + 导出 ═══════════════ */
+let sumData = null, sumSel = new Set(), titleDirty = false;
 function openSummary(){
   const [y,m] = viewYM.split('-').map(Number);
   const ys = $('sumYear'); ys.innerHTML='';
   for(let i=y-3;i<=y+1;i++) ys.innerHTML += '<option'+(i===y?' selected':'')+'>'+i+'</option>';
   const ms = $('sumMonth'); ms.innerHTML='';
   for(let i=1;i<=12;i++) ms.innerHTML += '<option'+(i===m?' selected':'')+'>'+i+'</option>';
+  titleDirty = false;
+  if(!$('expUnit').value) $('expUnit').value = '汉江局技术管理室';
+  if(!$('expDate').value) $('expDate').value = todayStr();
   show('sumMask'); buildSummary();
 }
 $('sumYear').onchange = buildSummary;
 $('sumMonth').onchange = buildSummary;
+$('expTitle').addEventListener('input', ()=>{ titleDirty = true; });
+$('selAll').onclick = ()=>{
+  if(!sumData) return;
+  sumSel = sumSel.size === sumData.names.length ? new Set() : new Set(sumData.names);
+  renderSumChips(); renderSumCards();
+};
 
-let sumData = null; // {ym, names, days, recs}
 async function buildSummary(){
   const ym = $('sumYear').value+'-'+pad(+$('sumMonth').value);
   $('sumBody').innerHTML='<div style="text-align:center;padding:16px"><span class="spin"></span></div>';
+  $('sumPersons').innerHTML='';
   let recs=[];
   try{ recs = await Store.monthRecords(ym); }catch(e){ toast('加载失败：'+e.message, 3000); }
   const names = [...new Set(recs.map(r=>r.name))].sort();
   const days = new Date(+ym.slice(0,4), +ym.slice(5,7), 0).getDate();
   sumData = {ym, names, days, recs};
-  if(!names.length){ $('sumBody').innerHTML='<div style="text-align:center;color:var(--mut);padding:18px">该月暂无打卡数据</div>'; return; }
+  sumSel = new Set(names);
+  if(!titleDirty) $('expTitle').value = '汉江局技术管理室 '+ym.replace('-','年')+'月 考勤汇总表';
+  renderSumChips();
+  renderSumCards();
+}
+function renderSumChips(){
+  if(!sumData){ $('sumPersons').innerHTML=''; return; }
+  $('sumPersons').innerHTML = sumData.names.map(n=>{
+    const on = sumSel.has(n);
+    return '<button type="button" class="chip'+(on?' on':'')+'"'+(on?' style="background:var(--navy2)"':'')+'>'+esc(n)+'</button>';
+  }).join('');
+  $('sumPersons').querySelectorAll('.chip').forEach(b=>{
+    const n = b.textContent;
+    b.onclick = ()=>{ sumSel.has(n)?sumSel.delete(n):sumSel.add(n); renderSumChips(); renderSumCards(); };
+  });
+}
+function renderSumCards(){
+  if(!sumData || !sumData.names.length){
+    $('sumBody').innerHTML='<div style="text-align:center;color:var(--mut);padding:18px">该月暂无打卡数据</div>'; return;
+  }
+  const sel = sumData.names.filter(n=>sumSel.has(n));
+  if(!sel.length){
+    $('sumBody').innerHTML='<div style="text-align:center;color:var(--mut);padding:18px">请至少勾选一名人员</div>'; return;
+  }
+  const recs = sumData.recs.filter(r=>sumSel.has(r.name));
   // 顶部总览
   let h = '<div class="sum-overview">'+
-    '<div class="ov"><b>'+names.length+'</b><span>打卡人数</span></div>'+
+    '<div class="ov"><b>'+sel.length+'</b><span>打卡人数</span></div>'+
     '<div class="ov"><b>'+recs.length+'</b><span>打卡天次</span></div>'+
     '<div class="ov"><b>'+recs.filter(r=>r.work).length+'</b><span>工作内容条数</span></div></div>';
-  // 每人一张卡：状态统计徽章 + 每日明细
-  names.forEach(n=>{
+  // 每人一张卡：序号 + 状态统计徽章 + 每日明细
+  sel.forEach((n,i)=>{
     const mine = recs.filter(r=>r.name===n).sort((a,b)=>a.date<b.date?-1:1);
     const cnt = k => mine.filter(r=>r.statuses.includes(k)).length;
-    h += '<div class="person-card"><div class="ph"><span class="pn">'+esc(n)+'</span>'+
+    h += '<div class="person-card"><div class="ph"><span class="pn">'+(i+1)+'. '+esc(n)+'</span>'+
       '<span class="pd">打卡 '+mine.length+' 天</span></div>';
     h += '<div class="st-row">'+STATUSES.map(s=>{
       const c = cnt(s.k);
@@ -741,30 +786,50 @@ async function buildSummary(){
   $('sumBody').innerHTML = h;
 }
 
+/* ── 导出公共：取勾选人员 + 导出设置 ── */
+function getExport(){
+  if(!sumData || !sumData.names.length){ toast('该月暂无数据可导出'); return null; }
+  const sel = sumData.names.filter(n=>sumSel.has(n));
+  if(!sel.length){ toast('请至少勾选一名人员'); return null; }
+  return {
+    ym: sumData.ym,
+    title: $('expTitle').value.trim() || '考勤汇总表',
+    unit: $('expUnit').value.trim(),
+    date: $('expDate').value,
+    note: $('expNote').value.trim(),
+    sel,
+    recs: sumData.recs.filter(r=>sumSel.has(r.name)),
+  };
+}
+
 /* ── Excel 导出（无需外库：SpreadsheetML .xls）── */
 $('expExcel').onclick = ()=>{
-  if(!sumData || !sumData.names.length){ toast('该月暂无数据可导出'); return; }
-  const {ym, names, recs} = sumData;
+  const E = getExport(); if(!E) return;
   const xesc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const cell = (v,st) => '<Cell'+(st?' ss:StyleID="'+st+'"':'')+'><Data ss:Type="'+(typeof v==='number'?'Number':'String')+'">'+xesc(v)+'</Data></Cell>';
   let rows = '';
-  rows += '<Row>'+cell('汉江局技术管理室 '+ym.replace('-','年')+'月 考勤汇总表','t')+'</Row>';
+  rows += '<Row>'+cell(E.title,'t')+'</Row>';
+  rows += '<Row>'+cell('单位：'+E.unit+'　　填表日期：'+E.date)+'</Row>';
+  if(E.note) rows += '<Row>'+cell('备注：'+E.note)+'</Row>';
   rows += '<Row></Row>';
-  rows += '<Row>'+['姓名','打卡天数',...STATUSES.map(s=>s.k)].map(v=>cell(v,'h')).join('')+'</Row>';
-  names.forEach(n=>{
-    const mine = recs.filter(r=>r.name===n);
+  rows += '<Row>'+['序号','姓名','打卡天数',...STATUSES.map(s=>s.k)].map(v=>cell(v,'h')).join('')+'</Row>';
+  E.sel.forEach((n,i)=>{
+    const mine = E.recs.filter(r=>r.name===n);
     const cnt = k => mine.filter(r=>r.statuses.includes(k)).length;
-    rows += '<Row>'+cell(n,'h')+cell(mine.length)+STATUSES.map(s=>cell(cnt(s.k)||'')).join('')+'</Row>';
+    rows += '<Row>'+cell(i+1)+cell(n,'h')+cell(mine.length)+STATUSES.map(s=>cell(cnt(s.k)||'')).join('')+'</Row>';
   });
   rows += '<Row></Row><Row>'+cell('每日工作内容明细','t')+'</Row>';
-  rows += '<Row>'+['姓名','日期','状态','工作内容'].map(v=>cell(v,'h')).join('')+'</Row>';
-  recs.slice().sort((a,b)=>a.date<b.date?-1:1).forEach(r=>{
-    rows += '<Row>'+cell(r.name)+cell(r.date)+cell(r.statuses.join('、'))+cell(r.work||'')+'</Row>';
+  E.sel.forEach((n,i)=>{
+    const mine = E.recs.filter(r=>r.name===n).sort((a,b)=>a.date<b.date?-1:1);
+    rows += '<Row>'+cell((i+1)+'. '+n+'（打卡 '+mine.length+' 天）','t2')+'</Row>';
+    rows += '<Row>'+['日期','状态','工作内容'].map(v=>cell(v,'h')).join('')+'</Row>';
+    mine.forEach(r=>{ rows += '<Row>'+cell(r.date)+cell(r.statuses.join('、'))+cell(r.work||'')+'</Row>'; });
   });
   const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n'+
     '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'+
     '<Styles>'+
     '<Style ss:ID="t"><Font ss:Bold="1" ss:Size="14"/></Style>'+
+    '<Style ss:ID="t2"><Font ss:Bold="1" ss:Size="12"/><Interior ss:Color="#DCE9F7" ss:Pattern="Solid"/></Style>'+
     '<Style ss:ID="h"><Font ss:Bold="1"/><Interior ss:Color="#EEF3F8" ss:Pattern="Solid"/><Borders>'+
     '<Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>'+
     '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'+
@@ -774,7 +839,7 @@ $('expExcel').onclick = ()=>{
     '</Styles>'+
     '<Worksheet ss:Name="月考勤汇总"><Table ss:DefaultRowHeight="18">'+rows+'</Table></Worksheet></Workbook>';
   const blob = new Blob(['﻿'+xml], {type:'application/vnd.ms-excel'});
-  dl(blob, '汉江局技术管理室_'+ym+'_考勤汇总.xls');
+  dl(blob, E.title+'.xls');
   toast('Excel 已导出');
 };
 function dl(blob, name){
@@ -786,24 +851,32 @@ function dl(blob, name){
 
 /* ── PDF 导出（打印视图，浏览器另存为 PDF）── */
 $('expPdf').onclick = ()=>{
-  if(!sumData || !sumData.names.length){ toast('该月暂无数据可导出'); return; }
-  const {ym, names, recs} = sumData;
-  let h = '<h2 style="text-align:center">汉江局技术管理室 '+ym.replace('-',' 年 ')+' 月 考勤汇总表</h2>';
-  h += '<table><tr><th>姓名</th><th>打卡天数</th>'+STATUSES.map(s=>'<th>'+s.k+'</th>').join('')+'</tr>';
-  names.forEach(n=>{
-    const mine = recs.filter(r=>r.name===n);
+  const E = getExport(); if(!E) return;
+  let h = '<h2 style="text-align:center;margin-bottom:6px">'+esc(E.title)+'</h2>';
+  h += '<p style="text-align:center;font-size:12px;color:#55687a;margin:0 0 14px">单位：'+esc(E.unit)+
+    '　　填表日期：'+esc(E.date)+(E.note?'<br>备注：'+esc(E.note):'')+'</p>';
+  h += '<table><tr><th>序号</th><th>姓名</th><th>打卡天数</th>'+STATUSES.map(s=>'<th>'+s.k+'</th>').join('')+'</tr>';
+  E.sel.forEach((n,i)=>{
+    const mine = E.recs.filter(r=>r.name===n);
     const cnt = k => mine.filter(r=>r.statuses.includes(k)).length;
-    h += '<tr><td>'+esc(n)+'</td><td>'+mine.length+'</td>'+STATUSES.map(s=>'<td>'+(cnt(s.k)||'')+'</td>').join('')+'</tr>';
+    h += '<tr><td>'+(i+1)+'</td><td>'+esc(n)+'</td><td>'+mine.length+'</td>'+
+      STATUSES.map(s=>'<td>'+(cnt(s.k)||'')+'</td>').join('')+'</tr>';
   });
-  h += '</table><h3>每日工作内容明细</h3><table><tr><th>姓名</th><th>日期</th><th>状态</th><th>工作内容</th></tr>';
-  recs.slice().sort((a,b)=>a.date<b.date?-1:1).forEach(r=>{
-    h += '<tr><td>'+esc(r.name)+'</td><td>'+r.date+'</td><td>'+esc(r.statuses.join('、'))+'</td><td style="text-align:left">'+esc(r.work||'')+'</td></tr>';
+  h += '</table><h3>每日工作内容明细</h3>';
+  E.sel.forEach((n,i)=>{
+    const mine = E.recs.filter(r=>r.name===n).sort((a,b)=>a.date<b.date?-1:1);
+    h += '<h4 style="margin:14px 0 6px;background:#eef3f8;padding:6px 10px;border-left:4px solid #0e3a5f">'+
+      (i+1)+'. '+esc(n)+'（打卡 '+mine.length+' 天）</h4>';
+    h += '<table><tr><th style="width:90px">日期</th><th style="width:150px">状态</th><th>工作内容</th></tr>';
+    mine.forEach(r=>{
+      h += '<tr><td>'+r.date+'</td><td>'+esc(r.statuses.join('、'))+'</td><td style="text-align:left">'+esc(r.work||'')+'</td></tr>';
+    });
+    h += '</table>';
   });
-  h += '</table>';
   const w = window.open('', '_blank');
-  w.document.write('<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>考勤汇总 '+ym+'</title>'+
+  w.document.write('<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>'+esc(E.title)+'</title>'+
     '<style>body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;padding:24px;color:#1f2d3d}'+
-    'table{border-collapse:collapse;width:100%;font-size:12px;margin-bottom:18px}'+
+    'table{border-collapse:collapse;width:100%;font-size:12px;margin-bottom:10px}'+
     'th,td{border:1px solid #8fa2b5;padding:5px 6px;text-align:center}th{background:#eef3f8}</style></head>'+
     '<body>'+h+'<script>window.onload=function(){window.print()}<\/script></body></html>');
   w.document.close();
