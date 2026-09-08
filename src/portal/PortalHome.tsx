@@ -9,6 +9,7 @@ interface ToolCard {
   icon: string;
   path?: string; // 有路径表示已上线
   tags?: string[];
+  apk?: string; // 安卓安装包下载地址
 }
 
 // ── 工具注册表：后续新增工具只需在此追加条目 ──
@@ -36,6 +37,7 @@ const TOOLS: ToolCard[] = [
     icon: '📋',
     path: '/attendance',
     tags: ['考勤打卡', '任务发布', '独立密码'],
+    apk: './apk/attendance.apk',
   },
   // 预留窗口：后续工具在此追加
   { key: 'slot-3', name: '预留工具窗口', desc: '后续工具将部署于此，敬请期待。', icon: '📊' },
@@ -77,31 +79,41 @@ export default function PortalHome() {
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {TOOLS.map((t) =>
             t.path ? (
-              <Link
-                key={t.key}
-                to={t.path}
-                className="group rounded-xl border border-[#2b5a82] bg-[#0d2f4e]/80 p-5 shadow-lg transition hover:border-[#d4af37]/60 hover:bg-[#103a5f] hover:shadow-[#d4af37]/10 hover:shadow-xl"
-              >
-                <div className="mb-3 flex items-center gap-3">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-gradient-to-br from-[#1a4a74] to-[#0e3a5f] text-xl ring-1 ring-[#d4af37]/30">
-                    {t.icon}
-                  </span>
-                  <div className="text-[15px] font-semibold text-white group-hover:text-[#e6c15a]">
-                    {t.name}
-                  </div>
-                </div>
-                <p className="mb-4 text-xs leading-5 text-slate-300">{t.desc}</p>
-                <div className="flex items-center gap-1.5">
-                  {t.tags?.map((tag) => (
-                    <span key={tag} className="rounded bg-[#1a4a74] px-2 py-0.5 text-[10px] text-slate-300">
-                      {tag}
+              <div key={t.key} className="flex flex-col gap-2">
+                <Link
+                  to={t.path}
+                  className="group flex-1 rounded-xl border border-[#2b5a82] bg-[#0d2f4e]/80 p-5 shadow-lg transition hover:border-[#d4af37]/60 hover:bg-[#103a5f] hover:shadow-[#d4af37]/10 hover:shadow-xl"
+                >
+                  <div className="mb-3 flex items-center gap-3">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-gradient-to-br from-[#1a4a74] to-[#0e3a5f] text-xl ring-1 ring-[#d4af37]/30">
+                      {t.icon}
                     </span>
-                  ))}
-                  <span className="ml-auto text-xs text-[#d4af37] opacity-0 transition group-hover:opacity-100">
-                    进入 →
-                  </span>
-                </div>
-              </Link>
+                    <div className="text-[15px] font-semibold text-white group-hover:text-[#e6c15a]">
+                      {t.name}
+                    </div>
+                  </div>
+                  <p className="mb-4 text-xs leading-5 text-slate-300">{t.desc}</p>
+                  <div className="flex items-center gap-1.5">
+                    {t.tags?.map((tag) => (
+                      <span key={tag} className="rounded bg-[#1a4a74] px-2 py-0.5 text-[10px] text-slate-300">
+                        {tag}
+                      </span>
+                    ))}
+                    <span className="ml-auto text-xs text-[#d4af37] opacity-0 transition group-hover:opacity-100">
+                      进入 →
+                    </span>
+                  </div>
+                </Link>
+                {t.apk && (
+                  <a
+                    href={t.apk}
+                    download
+                    className="flex items-center justify-center gap-1.5 rounded-lg border border-[#d4af37]/40 bg-[#12395c]/60 py-1.5 text-xs text-[#e6c15a] transition hover:bg-[#1a4a74]"
+                  >
+                    📱 安卓版 APP 下载（APK）
+                  </a>
+                )}
+              </div>
             ) : (
               <div
                 key={t.key}

@@ -22,10 +22,17 @@ export default function AttendanceTool() {
           </span>
         </div>
         <a
+          href="./apk/attendance.apk"
+          download
+          className="ml-auto rounded-lg border border-[#d4af37]/50 px-3 py-1.5 text-xs text-[#e6c15a] transition hover:bg-[#1a4a74]"
+        >
+          📱 安卓版
+        </a>
+        <a
           href={TOOL_URL}
           target="_blank"
           rel="noreferrer"
-          className="ml-auto rounded-lg border border-[#2b5a82] px-3 py-1.5 text-xs text-slate-300 transition hover:border-[#d4af37]/60 hover:text-[#e6c15a]"
+          className="rounded-lg border border-[#2b5a82] px-3 py-1.5 text-xs text-slate-300 transition hover:border-[#d4af37]/60 hover:text-[#e6c15a]"
         >
           ⛶ 新窗口打开
         </a>
