@@ -143,6 +143,27 @@ table.sum th,table.sum td{border:1px solid #cfd9e4;padding:6px 5px;text-align:ce
 table.sum th{background:#eef3f8;font-weight:600;}
 table.sum td.l{text-align:left;white-space:normal;min-width:120px;}
 .sum-wrap{overflow:auto;border-radius:10px;}
+/* 汇总卡片（多人手机端友好） */
+.sum-overview{display:flex;gap:8px;margin-bottom:12px;}
+.sum-overview .ov{flex:1;background:#f0f6ff;border:1px solid #cfe0f5;border-radius:10px;
+  padding:9px 6px;text-align:center;}
+.sum-overview .ov b{display:block;font-size:19px;color:var(--navy);}
+.sum-overview .ov span{font-size:11px;color:var(--mut);}
+.person-card{border:1px solid var(--line);border-radius:12px;margin-bottom:12px;background:#fff;overflow:hidden;}
+.person-card .ph{display:flex;align-items:center;gap:8px;padding:11px 14px;
+  background:linear-gradient(135deg,#f7fafc,#eef3f8);border-bottom:1px solid var(--line);}
+.person-card .ph .pn{font-size:15px;font-weight:700;color:var(--navy);}
+.person-card .ph .pd{margin-left:auto;font-size:12px;color:var(--mut);}
+.person-card .st-row{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px 6px;}
+.st-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:4px 10px;
+  border-radius:999px;color:#fff;}
+.st-badge.zero{background:#eef2f6;color:#9db0c2;}
+.person-card .wk{padding:4px 14px 11px;}
+.work-line{display:flex;gap:8px;font-size:12.5px;padding:6px 0;border-top:1px dashed #e8eef4;align-items:baseline;}
+.work-line:first-child{border-top:none;}
+.work-line .d{flex-shrink:0;color:var(--navy);font-weight:600;min-width:44px;}
+.work-line .s{flex-shrink:0;color:var(--mut);font-size:11px;max-width:120px;}
+.work-line .w{color:var(--ink);word-break:break-all;}
 footer.foot{text-align:center;font-size:11px;color:#9db0c2;padding:16px 0 26px;}
 </style>
 </head>
@@ -272,7 +293,7 @@ footer.foot{text-align:center;font-size:11px;color:#9db0c2;padding:16px 0 26px;}
         <div><div class="f-label">年份</div><select class="f-input" id="sumYear"></select></div>
         <div><div class="f-label">月份</div><select class="f-input" id="sumMonth"></select></div>
       </div>
-      <div class="f-label">统计表</div>
+      <div class="f-label">本月总览</div>
       <div class="sum-wrap" id="sumBody"></div>
     </div>
     <div class="mft">
@@ -696,21 +717,27 @@ async function buildSummary(){
   const days = new Date(+ym.slice(0,4), +ym.slice(5,7), 0).getDate();
   sumData = {ym, names, days, recs};
   if(!names.length){ $('sumBody').innerHTML='<div style="text-align:center;color:var(--mut);padding:18px">该月暂无打卡数据</div>'; return; }
-  let h='<table class="sum"><tr><th>姓名</th><th>打卡天数</th>'+
-    STATUSES.map(s=>'<th>'+s.k+'</th>').join('')+'</tr>';
+  // 顶部总览
+  let h = '<div class="sum-overview">'+
+    '<div class="ov"><b>'+names.length+'</b><span>打卡人数</span></div>'+
+    '<div class="ov"><b>'+recs.length+'</b><span>打卡天次</span></div>'+
+    '<div class="ov"><b>'+recs.filter(r=>r.work).length+'</b><span>工作内容条数</span></div></div>';
+  // 每人一张卡：状态统计徽章 + 每日明细
   names.forEach(n=>{
-    const mine = recs.filter(r=>r.name===n);
+    const mine = recs.filter(r=>r.name===n).sort((a,b)=>a.date<b.date?-1:1);
     const cnt = k => mine.filter(r=>r.statuses.includes(k)).length;
-    h += '<tr><td>'+esc(n)+'</td><td>'+mine.length+'</td>'+
-      STATUSES.map(s=>'<td>'+(cnt(s.k)||'')+'</td>').join('')+'</tr>';
+    h += '<div class="person-card"><div class="ph"><span class="pn">'+esc(n)+'</span>'+
+      '<span class="pd">打卡 '+mine.length+' 天</span></div>';
+    h += '<div class="st-row">'+STATUSES.map(s=>{
+      const c = cnt(s.k);
+      return c ? '<span class="st-badge" style="background:'+s.c+'">'+s.k+' '+c+'</span>' : '';
+    }).join('')+'</div>';
+    h += '<div class="wk">'+mine.map(r=>
+      '<div class="work-line"><span class="d">'+r.date.slice(5).replace('-','/')+'</span>'+
+      '<span class="s">'+esc(r.statuses.join('·'))+'</span>'+
+      '<span class="w">'+esc(r.work||'—')+'</span></div>').join('')+'</div>';
+    h += '</div>';
   });
-  h += '</table>';
-  h += '<div class="f-label" style="margin-top:16px">每日工作内容明细</div>';
-  h += '<table class="sum"><tr><th>姓名</th><th>日期</th><th>状态</th><th>工作内容</th></tr>';
-  recs.slice().sort((a,b)=>a.date<b.date?-1:1).forEach(r=>{
-    h += '<tr><td>'+esc(r.name)+'</td><td>'+r.date+'</td><td>'+esc(r.statuses.join('、'))+'</td><td class="l">'+esc(r.work||'')+'</td></tr>';
-  });
-  h += '</table>';
   $('sumBody').innerHTML = h;
 }
 
