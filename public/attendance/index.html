@@ -339,37 +339,66 @@ function cloudOn(){ const c=ghConf(); return !!(c && c.token && c.repo); }
 
 const b64e = s => btoa(unescape(encodeURIComponent(s)));
 const b64d = s => decodeURIComponent(escape(atob(s.replace(/\n/g,''))));
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+/* 缓存：shaCache 记录文件指纹；ghCache 记录本机上次写入的 {内容,指纹}，
+   避免 GitHub 读副本延迟导致拿到旧版本 */
+const shaCache = {}, ghCache = {};
+
+async function ghFetch(url, opts, retry){
+  let lastErr;
+  for(let i=0;i<(retry||1);i++){
+    try{ return await fetch(url, opts); }
+    catch(e){ lastErr=e; await sleep(500*(i+1)); } // 网络抖动：退避重试
+  }
+  throw new Error('网络连接失败，请检查网络后重试');
+}
 
 async function ghRead(path){ // → {obj, sha} | null（文件不存在）
   const c = ghConf();
-  const res = await fetch('https://api.github.com/repos/'+c.repo+'/contents/'+path+'?ref=main', {
+  const res = await ghFetch('https://api.github.com/repos/'+c.repo+'/contents/'+path+'?ref=main&_='+Date.now(), {
     headers: {'Authorization':'Bearer '+c.token, 'Accept':'application/vnd.github+json'},
-  });
+  }, 2);
   if(res.status===404) return null;
   if(!res.ok){ const t=await res.text(); throw new Error('云端读取失败 '+res.status+'：'+t.slice(0,100)); }
   const d = await res.json();
+  shaCache[path] = d.sha;
   return { obj: JSON.parse(b64d(d.content)), sha: d.sha };
 }
 async function ghWrite(path, obj, sha, msg){
   const c = ghConf();
   const body = { message: msg, content: b64e(JSON.stringify(obj)), branch: 'main' };
   if(sha) body.sha = sha;
-  const res = await fetch('https://api.github.com/repos/'+c.repo+'/contents/'+path, {
+  const res = await ghFetch('https://api.github.com/repos/'+c.repo+'/contents/'+path, {
     method: 'PUT',
     headers: {'Authorization':'Bearer '+c.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json'},
     body: JSON.stringify(body),
-  });
+  }, 2);
   if(!res.ok){ const t=await res.text(); const e=new Error('云端写入失败 '+res.status+'：'+t.slice(0,100)); e.status=res.status; throw e; }
+  const d = await res.json();
+  return d.content ? d.content.sha : null;
 }
-/* 读-改-写，冲突（409/422）时重读合并重试 */
+/* 读-改-写：优先用本机缓存的 {内容,指纹}（上次写入的结果），冲突时清缓存重读重试 */
 async function ghUpdate(path, defObj, mut, msg){
   let lastErr;
-  for(let i=0;i<3;i++){
-    const cur = await ghRead(path);
-    const obj = cur ? cur.obj : JSON.parse(JSON.stringify(defObj));
+  for(let i=0;i<5;i++){
+    let cur = ghCache[path];
+    if(!cur){
+      try{ const r = await ghRead(path); if(r){ ghCache[path]=r; cur=r; } }
+      catch(e){ if(e.message && e.message.indexOf('云端读取失败')===0) throw e; }
+    }
+    const obj = cur ? JSON.parse(JSON.stringify(cur.obj)) : JSON.parse(JSON.stringify(defObj));
     mut(obj);
-    try{ await ghWrite(path, obj, cur?cur.sha:null, msg); return; }
-    catch(e){ lastErr=e; if(e.status!==409 && e.status!==422) throw e; }
+    try{
+      const sha = await ghWrite(path, obj, cur?cur.sha:null, msg);
+      if(sha) ghCache[path] = {obj, sha};
+      return;
+    }catch(e){
+      lastErr = e;
+      if(e.status!==409 && e.status!==422) throw e;
+      delete ghCache[path];           // 冲突说明别人已更新，清缓存重取最新
+      await sleep(600*(i+1));
+    }
   }
   throw lastErr;
 }
