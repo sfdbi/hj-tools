@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>汉江局技术管理室 · 考勤</title>
+<style>
+:root{
+  --navy:#0a2540; --navy2:#0e3a5f; --gold:#c9a227; --gold2:#e6c15a;
+  --ink:#1f2d3d; --mut:#6b7c8d; --line:#dbe3ec; --bg:#f2f5f9; --card:#ffffff;
+  --green:#22a06b; --blue:#2f7fd0; --orange:#e08a1e; --purple:#8a63d2;
+  --teal:#1fa8a0; --red:#d9534f; --amber:#c9a227;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+  font-family:"PingFang SC","Microsoft YaHei","Source Han Sans SC",sans-serif;font-size:15px;}
+button{font-family:inherit;cursor:pointer;border:none;background:none;}
+input,textarea,select{font-family:inherit;font-size:15px;}
+
+/* ─────── 门禁 / 姓名 屏 ─────── */
+.gate{min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#0a2540,#0e3a5f 55%,#123f66);padding:20px;}
+.gate-card{width:100%;max-width:380px;background:rgba(13,47,78,.92);border:1px solid rgba(212,175,55,.35);
+  border-radius:18px;padding:34px 28px;box-shadow:0 18px 50px rgba(0,0,0,.35);}
+.gate-org{text-align:center;font-size:13px;letter-spacing:.3em;color:var(--gold2);}
+.gate-title{text-align:center;font-size:24px;font-weight:700;color:#fff;margin:6px 0 4px;}
+.gate-sub{text-align:center;font-size:11px;color:#8fa8bf;letter-spacing:.18em;margin-bottom:22px;}
+.gate-divider{width:96px;height:1px;margin:0 auto 22px;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent);}
+.gate label{display:block;font-size:12px;color:#b8c9da;margin:0 0 6px;}
+.gate input{width:100%;padding:12px 14px;border-radius:10px;border:1px solid #2b5a82;
+  background:#0a2540;color:#fff;outline:none;font-size:16px;}
+.gate input:focus{border-color:var(--gold2);}
+.gate .btn-gold{width:100%;margin-top:18px;padding:13px;border-radius:10px;font-size:16px;font-weight:600;
+  color:#0a2540;background:linear-gradient(135deg,var(--gold),var(--gold2));}
+.gate .err{margin-top:10px;text-align:center;font-size:13px;color:#ff8a80;min-height:18px;}
+.gate .tip{margin-top:14px;text-align:center;font-size:11px;color:#6f89a1;}
+.name-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+.name-chips button{padding:7px 14px;border-radius:999px;border:1px solid #2b5a82;color:#cfe0ef;font-size:13px;background:#103a5f;}
+.name-chips button:active{border-color:var(--gold2);color:var(--gold2);}
+
+/* ─────── 主界面 ─────── */
+header.bar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:8px;
+  padding:10px 12px;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;
+  box-shadow:0 2px 10px rgba(10,37,64,.25);}
+header.bar .tt{font-size:16px;font-weight:700;white-space:nowrap;}
+header.bar .tt small{display:block;font-size:10px;font-weight:400;color:#9db4c9;letter-spacing:.12em;}
+.month-nav{display:flex;align-items:center;gap:2px;margin-left:auto;background:rgba(255,255,255,.08);border-radius:9px;padding:2px;}
+.month-nav button{color:#e6c15a;font-size:17px;padding:5px 11px;}
+.month-nav .ym{font-size:14px;font-weight:600;min-width:86px;text-align:center;}
+.icon-btn{width:38px;height:38px;border-radius:9px;background:rgba(255,255,255,.1);
+  color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;}
+
+/* 菜单抽屉 */
+.menu-mask{position:fixed;inset:0;background:rgba(10,25,40,.45);z-index:40;}
+.menu{position:fixed;top:0;right:0;bottom:0;width:250px;background:#fff;z-index:41;
+  box-shadow:-6px 0 24px rgba(0,0,0,.2);padding:14px 0;overflow-y:auto;}
+.menu .mh{padding:6px 18px 12px;font-size:13px;color:var(--mut);border-bottom:1px solid var(--line);}
+.menu button.mi{display:flex;align-items:center;gap:12px;width:100%;padding:14px 18px;font-size:15px;color:var(--ink);text-align:left;}
+.menu button.mi:active{background:#eef3f8;}
+.menu button.mi .ic{font-size:18px;width:24px;text-align:center;}
+
+/* 任务条 */
+.task-strip{margin:10px 12px 0;}
+.task-item{display:flex;gap:8px;align-items:flex-start;background:#fff8e6;border:1px solid #ecd98f;
+  border-radius:10px;padding:9px 12px;margin-bottom:8px;font-size:13px;}
+.task-item .ti-t{font-weight:600;}
+.task-item .ti-d{color:var(--mut);font-size:12px;margin-top:2px;}
+.task-item .ti-flag{flex-shrink:0;}
+
+/* 月历表 */
+.cal-wrap{margin:12px;overflow:auto;background:var(--card);border:1px solid var(--line);
+  border-radius:12px;box-shadow:0 2px 8px rgba(20,40,60,.06);}
+table.cal{border-collapse:separate;border-spacing:0;min-width:100%;}
+table.cal th,table.cal td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);
+  padding:0;text-align:center;}
+table.cal th{background:#f7fafc;font-size:12px;color:var(--mut);font-weight:600;
+  min-width:34px;height:40px;position:sticky;top:0;z-index:2;}
+table.cal th .dw{font-size:10px;font-weight:400;color:#9fb0c0;}
+table.cal th.today{background:#fff3d6;color:#8a6d1a;}
+table.cal td.nm,table.cal th.nm{position:sticky;left:0;z-index:3;background:#fff;min-width:74px;max-width:96px;
+  font-size:13px;font-weight:600;padding:0 8px;text-align:left;border-right:2px solid #cdd8e3;}
+table.cal th.nm{z-index:4;background:#f7fafc;}
+table.cal td.cell{min-width:34px;height:46px;vertical-align:middle;cursor:pointer;}
+table.cal td.cell:active{background:#eef3f8;}
+table.cal tr.me td.nm{color:var(--navy);background:#f0f6ff;}
+table.cal tr.me td.cell{background:#fbfdff;}
+.dots{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;padding:2px;}
+.dot{width:8px;height:8px;border-radius:50%;}
+.wdot{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:#9db4c9;}
+td.cell{position:relative;}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin:0 12px 14px;font-size:12px;color:var(--mut);}
+.legend span{display:inline-flex;align-items:center;gap:5px;}
+.empty-hint{margin:26px 12px;padding:26px;text-align:center;color:var(--mut);font-size:14px;
+  background:#fff;border:1px dashed var(--line);border-radius:12px;}
+.cloud-flag{font-size:11px;padding:3px 10px;border-radius:999px;margin-left:6px;}
+.cloud-flag.on{background:#e4f6ec;color:#157347;border:1px solid #b7e4c7;}
+.cloud-flag.off{background:#fdeeee;color:#b02a37;border:1px solid #f3c2c7;}
+
+/* ─────── 弹窗 ─────── */
+.modal-mask{position:fixed;inset:0;background:rgba(10,25,40,.5);z-index:50;display:flex;
+  align-items:flex-end;justify-content:center;}
+.modal{width:100%;max-width:520px;max-height:88vh;background:#fff;border-radius:16px 16px 0 0;
+  display:flex;flex-direction:column;overflow:hidden;}
+@media(min-width:560px){.modal-mask{align-items:center;}.modal{border-radius:16px;margin:20px;}}
+.modal .mhd{display:flex;align-items:center;padding:15px 18px 12px;border-bottom:1px solid var(--line);}
+.modal .mhd .mt{font-size:17px;font-weight:700;}
+.modal .mhd .mx{margin-left:auto;font-size:22px;color:var(--mut);padding:2px 8px;}
+.modal .mbd{padding:16px 18px;overflow-y:auto;}
+.modal .mft{display:flex;gap:10px;padding:12px 18px;border-top:1px solid var(--line);}
+.f-label{font-size:13px;color:var(--mut);margin:14px 0 7px;}
+.f-label:first-child{margin-top:0;}
+.f-input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:9px;outline:none;background:#fff;}
+.f-input:focus{border-color:var(--blue);}
+textarea.f-input{min-height:88px;resize:vertical;}
+.chips{display:flex;flex-wrap:wrap;gap:9px;}
+.chip{padding:9px 16px;border-radius:999px;border:1.5px solid var(--line);font-size:14px;background:#fff;color:var(--ink);}
+.chip.on{color:#fff;border-color:transparent;}
+.btn{flex:1;padding:12px;border-radius:10px;font-size:15px;font-weight:600;text-align:center;}
+.btn-pri{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;}
+.btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#0a2540;}
+.btn-ghost{border:1px solid var(--line);color:var(--mut);background:#fff;}
+.btn-danger{background:#fdeeee;color:#b02a37;}
+.btn:disabled{opacity:.5;}
+.row2{display:flex;gap:10px;}
+.row2>*{flex:1;}
+.toast{position:fixed;left:50%;bottom:60px;transform:translateX(-50%);z-index:90;
+  background:rgba(15,35,55,.92);color:#fff;padding:11px 20px;border-radius:999px;font-size:14px;
+  box-shadow:0 6px 18px rgba(0,0,0,.3);max-width:86vw;text-align:center;}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);
+  border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-3px;}
+@keyframes sp{to{transform:rotate(360deg);}}
+
+/* 任务列表 */
+.tl-item{border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:10px;background:#fff;}
+.tl-item .t{font-weight:600;font-size:15px;}
+.tl-item .c{font-size:13px;color:var(--ink);margin-top:4px;white-space:pre-wrap;}
+.tl-item .m{font-size:12px;color:var(--mut);margin-top:6px;}
+
+/* 汇总表 */
+table.sum{border-collapse:collapse;width:100%;font-size:12px;background:#fff;}
+table.sum th,table.sum td{border:1px solid #cfd9e4;padding:6px 5px;text-align:center;white-space:nowrap;}
+table.sum th{background:#eef3f8;font-weight:600;}
+table.sum td.l{text-align:left;white-space:normal;min-width:120px;}
+.sum-wrap{overflow:auto;border-radius:10px;}
+footer.foot{text-align:center;font-size:11px;color:#9db0c2;padding:16px 0 26px;}
+</style>
+</head>
+<body>
+
+<!-- ═══════ 界面①：门禁 + 姓名 ═══════ -->
+<div id="gate" class="gate" style="display:none">
+  <div class="gate-card">
+    <div class="gate-org">汉江局技术管理室</div>
+    <div class="gate-title">考 勤</div>
+    <div class="gate-sub">ATTENDANCE · 内部工具</div>
+    <div class="gate-divider"></div>
+
+    <div id="gate-pwd">
+      <label>考勤工具密码（与站点大门密码独立）</label>
+      <input id="pwdInput" type="password" inputmode="text" placeholder="请输入密码" autocomplete="off">
+      <button class="btn-gold" id="pwdBtn">进入</button>
+      <div class="err" id="pwdErr"></div>
+    </div>
+
+    <div id="gate-name" style="display:none">
+      <label>你的姓名（首次填写后自动补全）</label>
+      <input id="nameInput" type="text" placeholder="请输入姓名" list="nameList" autocomplete="off">
+      <datalist id="nameList"></datalist>
+      <div class="name-chips" id="nameChips"></div>
+      <button class="btn-gold" id="nameBtn">开始使用</button>
+      <div class="err" id="nameErr"></div>
+      <div class="tip">多人共用一套数据，请如实填写本人姓名</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ 界面②：月历打卡主界面 ═══════ -->
+<div id="app" style="display:none">
+  <header class="bar">
+    <div class="tt">📋 考勤<small>汉江局技术管理室</small></div>
+    <div class="month-nav">
+      <button id="prevM">‹</button>
+      <span class="ym" id="ymLabel"></span>
+      <button id="nextM">›</button>
+    </div>
+    <button class="icon-btn" id="menuBtn" title="功能菜单">☰</button>
+  </header>
+
+  <div class="task-strip" id="taskStrip"></div>
+
+  <div style="display:flex;align-items:center;margin:10px 12px 0;">
+    <span style="font-size:13px;color:var(--mut)">当前打卡人：<b id="meLabel" style="color:var(--navy)"></b></span>
+    <span class="cloud-flag" id="cloudFlag"></span>
+  </div>
+
+  <div class="cal-wrap" id="calWrap"></div>
+  <div class="legend" id="legend"></div>
+  <div class="empty-hint" id="emptyHint" style="display:none">
+    本月还没有打卡数据<br><span style="font-size:12px">点击表格中自己姓名一行的日期格，开始打卡</span>
+  </div>
+  <footer class="foot">汉江局技术管理室 · 考勤工具</footer>
+</div>
+
+<!-- 菜单抽屉 -->
+<div id="menuMask" class="menu-mask" style="display:none"></div>
+<div id="menu" class="menu" style="display:none">
+  <div class="mh">功能菜单</div>
+  <button class="mi" data-act="pubTask"><span class="ic">📝</span>发布任务</button>
+  <button class="mi" data-act="taskList"><span class="ic">📑</span>任务列表</button>
+  <button class="mi" data-act="summary"><span class="ic">📊</span>月汇总 / 导出</button>
+  <button class="mi" data-act="switchName"><span class="ic">🔁</span>切换打卡人</button>
+  <button class="mi" data-act="settings"><span class="ic">⚙️</span>云存储设置</button>
+  <button class="mi" data-act="lock"><span class="ic">🔒</span>退出并锁定</button>
+</div>
+
+<!-- ═══════ 界面③：打卡填写弹窗 ═══════ -->
+<div id="ckMask" class="modal-mask" style="display:none">
+  <div class="modal">
+    <div class="mhd"><span class="mt" id="ckTitle">打卡</span><button class="mx" data-close="ckMask">×</button></div>
+    <div class="mbd">
+      <div class="f-label">考勤状态（可多选）</div>
+      <div class="chips" id="ckChips"></div>
+      <div class="f-label">工作内容</div>
+      <textarea class="f-input" id="ckWork" placeholder="填写当天主要工作内容…"></textarea>
+      <div class="f-label" id="ckMeta" style="color:#9db0c2;font-size:12px"></div>
+    </div>
+    <div class="mft">
+      <button class="btn btn-danger" id="ckDel" style="flex:0 0 96px;display:none">删除</button>
+      <button class="btn btn-pri" id="ckSave">保存打卡</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ 界面④：任务发布 ═══════ -->
+<div id="taskMask" class="modal-mask" style="display:none">
+  <div class="modal">
+    <div class="mhd"><span class="mt">📝 发布任务</span><button class="mx" data-close="taskMask">×</button></div>
+    <div class="mbd">
+      <div class="f-label">任务名称</div>
+      <input class="f-input" id="tkTitle" placeholder="如：三季度资料整编">
+      <div class="f-label">任务内容</div>
+      <textarea class="f-input" id="tkContent" placeholder="任务具体要求…"></textarea>
+      <div class="row2">
+        <div><div class="f-label">开始日期</div><input class="f-input" id="tkStart" type="date"></div>
+        <div><div class="f-label">结束日期</div><input class="f-input" id="tkEnd" type="date"></div>
+      </div>
+      <div class="f-label">发布人</div>
+      <input class="f-input" id="tkPublisher" list="nameList2" placeholder="指定发布人">
+      <datalist id="nameList2"></datalist>
+    </div>
+    <div class="mft">
+      <button class="btn btn-gold" id="tkSave">发布</button>
+    </div>
+  </div>
+</div>
+
+<!-- 任务列表 -->
+<div id="tlMask" class="modal-mask" style="display:none">
+  <div class="modal">
+    <div class="mhd"><span class="mt">📑 任务列表</span><button class="mx" data-close="tlMask">×</button></div>
+    <div class="mbd" id="tlBody"></div>
+  </div>
+</div>
+
+<!-- ═══════ 界面⑤：月汇总 + 导出 ═══════ -->
+<div id="sumMask" class="modal-mask" style="display:none">
+  <div class="modal">
+    <div class="mhd"><span class="mt">📊 月考勤汇总</span><button class="mx" data-close="sumMask">×</button></div>
+    <div class="mbd">
+      <div class="row2">
+        <div><div class="f-label">年份</div><select class="f-input" id="sumYear"></select></div>
+        <div><div class="f-label">月份</div><select class="f-input" id="sumMonth"></select></div>
+      </div>
+      <div class="f-label">统计表</div>
+      <div class="sum-wrap" id="sumBody"></div>
+    </div>
+    <div class="mft">
+      <button class="btn btn-pri" id="expExcel">导出 Excel</button>
+      <button class="btn btn-gold" id="expPdf">导出 PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- 云存储设置 -->
+<div id="setMask" class="modal-mask" style="display:none">
+  <div class="modal">
+    <div class="mhd"><span class="mt">⚙️ 云存储设置（LeanCloud）</span><button class="mx" data-close="setMask">×</button></div>
+    <div class="mbd">
+      <div style="font-size:13px;color:var(--mut);line-height:1.7;background:#f2f7ff;border:1px solid #cfe0f5;border-radius:10px;padding:10px 12px;">
+        配置后数据保存在云端，多人手机实时共享；未配置时数据仅保存在本机浏览器。<br>
+        在 leancloud.cn 注册并创建应用后，于「设置 → 应用凭证」中取得以下三项。
+      </div>
+      <div class="f-label">App ID</div>
+      <input class="f-input" id="lcAppId" placeholder="如 eYxXXXXXXXXXXX">
+      <div class="f-label">App Key</div>
+      <input class="f-input" id="lcAppKey" placeholder="如 hYkXXXXXXXXXXX">
+      <div class="f-label">REST API 服务器地址</div>
+      <input class="f-input" id="lcServer" placeholder="如 https://xxx.lc-cn-n1-shared.com">
+    </div>
+    <div class="mft">
+      <button class="btn btn-ghost" id="lcClear" style="flex:0 0 110px">清除配置</button>
+      <button class="btn btn-pri" id="lcSave">保存并测试</button>
+    </div>
+  </div>
+</div>
+
+<div id="toastBox"></div>
+
+<script>
+'use strict';
+/* ═══════════════ 基础常量 ═══════════════ */
+const PWD_HASH = 'f7363f31b073e49a678b4bd5a59d69f8ecf9ad66d111b90cc52f1beae1dedcc7'; // SHA-256(工具独立密码)
+const AUTH_KEY = 'hj-att-auth', ME_KEY = 'hj-att-name', NAMES_KEY = 'hj-att-names', LC_KEY = 'hj-att-lc';
+const STATUSES = [
+  {k:'出勤',   c:'#22a06b'},
+  {k:'出差',   c:'#2f7fd0'},
+  {k:'加班',   c:'#e08a1e'},
+  {k:'调休',   c:'#8a63d2'},
+  {k:'正常休假',c:'#1fa8a0'},
+  {k:'病假',   c:'#d9534f'},
+  {k:'事假',   c:'#c9a227'},
+];
+const stColor = k => (STATUSES.find(s=>s.k===k)||{c:'#9db4c9'}).c;
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2,'0');
+const todayStr = () => { const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); };
+
+function toast(msg, ms=2200){
+  const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  $('toastBox').appendChild(t); setTimeout(()=>t.remove(), ms);
+}
+async function sha256Hex(s){
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+
+/* ═══════════════ 存储层：LeanCloud 云 / 本地回退 ═══════════════ */
+function lcConf(){ try{ return JSON.parse(localStorage.getItem(LC_KEY)||'null'); }catch(e){ return null; } }
+function cloudOn(){ const c=lcConf(); return !!(c && c.appId && c.appKey && c.server); }
+
+async function lcReq(method, path, body){
+  const c = lcConf();
+  const res = await fetch(c.server.replace(/\/$/,'') + '/1.1/' + path, {
+    method,
+    headers: {'X-LC-Id': c.appId, 'X-LC-Key': c.appKey, 'Content-Type':'application/json'},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if(!res.ok){ const t = await res.text(); throw new Error('云端返回 '+res.status+'：'+t.slice(0,120)); }
+  return res.json();
+}
+
+/* 记录：{name,date,statuses[],work,updatedAt}；任务：{title,content,startDate,endDate,publisher,createdAt} */
+const Store = {
+  async monthRecords(ym){ // ym = '2026-09'
+    if(cloudOn()){
+      const r = await lcReq('GET','classes/AttRecord?limit=500&where='+encodeURIComponent(JSON.stringify({date:{'$regex':'^'+ym}})));
+      return r.results.map(o=>({id:o.objectId,name:o.name,date:o.date,statuses:o.statuses||[],work:o.work||'',updatedAt:o.updatedAt}));
+    }
+    return localAll().filter(r=>r.date.startsWith(ym));
+  },
+  async allNames(){
+    const local = JSON.parse(localStorage.getItem(NAMES_KEY)||'[]');
+    if(!cloudOn()) return local;
+    try{
+      const r = await lcReq('GET','classes/AttRecord?limit=1000&keys=name');
+      const s = new Set(local); r.results.forEach(o=>s.add(o.name));
+      return [...s].filter(Boolean).sort();
+    }catch(e){ return local; }
+  },
+  async saveRecord(rec){ // rec: {name,date,statuses,work}
+    rec.updatedAt = new Date().toISOString();
+    rememberName(rec.name);
+    if(cloudOn()){
+      const q = await lcReq('GET','classes/AttRecord?where='+encodeURIComponent(JSON.stringify({name:rec.name,date:rec.date})));
+      if(q.results.length) await lcReq('PUT','classes/AttRecord/'+q.results[0].objectId, rec);
+      else await lcReq('POST','classes/AttRecord', rec);
+      return;
+    }
+    const all = localAll();
+    const i = all.findIndex(r=>r.name===rec.name && r.date===rec.date);
+    if(i>=0) all[i]=rec; else all.push(rec);
+    localSave(all);
+  },
+  async delRecord(name,date){
+    if(cloudOn()){
+      const q = await lcReq('GET','classes/AttRecord?where='+encodeURIComponent(JSON.stringify({name,date})));
+      for(const o of q.results) await lcReq('DELETE','classes/AttRecord/'+o.objectId);
+      return;
+    }
+    localSave(localAll().filter(r=>!(r.name===name&&r.date===date)));
+  },
+  async monthTasks(ym){
+    const first = ym+'-01', last = ym+'-31';
+    if(cloudOn()){
+      const r = await lcReq('GET','classes/AttTask?limit=200&order=-createdAt&where='+encodeURIComponent(
+        JSON.stringify({startDate:{'$lte':last}, endDate:{'$gte':first}})));
+      return r.results.map(o=>({id:o.objectId,title:o.title,content:o.content||'',
+        startDate:o.startDate,endDate:o.endDate,publisher:o.publisher||'',createdAt:o.createdAt}));
+    }
+    return localTasks().filter(t=>t.startDate<=last && t.endDate>=first);
+  },
+  async saveTask(t){
+    t.createdAt = new Date().toISOString(); rememberName(t.publisher);
+    if(cloudOn()){ await lcReq('POST','classes/AttTask', t); return; }
+    const all = localTasks(); all.push(t); localStorage.setItem('hj-att-tasks', JSON.stringify(all));
+  },
+  async delTask(id, createdAt){
+    if(cloudOn()){ await lcReq('DELETE','classes/AttTask/'+id); return; }
+    localStorage.setItem('hj-att-tasks', JSON.stringify(localTasks().filter(t=>t.createdAt!==createdAt)));
+  },
+};
+function localAll(){ try{ return JSON.parse(localStorage.getItem('hj-att-records')||'[]'); }catch(e){ return []; } }
+function localSave(a){ localStorage.setItem('hj-att-records', JSON.stringify(a)); }
+function localTasks(){ try{ return JSON.parse(localStorage.getItem('hj-att-tasks')||'[]'); }catch(e){ return []; } }
+function rememberName(n){
+  if(!n) return;
+  const a = JSON.parse(localStorage.getItem(NAMES_KEY)||'[]');
+  if(!a.includes(n)){ a.push(n); localStorage.setItem(NAMES_KEY, JSON.stringify(a)); }
+}
+
+/* ═══════════════ 界面①：门禁 + 姓名 ═══════════════ */
+let ME = localStorage.getItem(ME_KEY)||'';
+let viewYM = todayStr().slice(0,7);
+
+function showGate(){
+  $('gate').style.display='flex'; $('app').style.display='none';
+  const authed = sessionStorage.getItem(AUTH_KEY)==='1';
+  $('gate-pwd').style.display = authed ? 'none' : 'block';
+  $('gate-name').style.display = authed ? 'block' : 'none';
+  if(authed) initNameStep();
+}
+async function initNameStep(){
+  if(ME) $('nameInput').value = ME;
+  const names = await Store.allNames();
+  $('nameList').innerHTML = names.map(n=>'<option value="'+esc(n)+'">').join('');
+  $('nameList2').innerHTML = $('nameList').innerHTML;
+  $('nameChips').innerHTML = names.map(n=>'<button type="button">'+esc(n)+'</button>').join('');
+  $('nameChips').querySelectorAll('button').forEach(b=>b.onclick=()=>{ $('nameInput').value=b.textContent; });
+}
+$('pwdBtn').onclick = async ()=>{
+  const v = $('pwdInput').value.trim();
+  if(!v) return;
+  if(await sha256Hex(v) === PWD_HASH){
+    sessionStorage.setItem(AUTH_KEY,'1');
+    $('gate-pwd').style.display='none'; $('gate-name').style.display='block';
+    initNameStep();
+  } else { $('pwdErr').textContent='密码错误'; $('pwdInput').value=''; }
+};
+$('pwdInput').addEventListener('keydown', e=>{ if(e.key==='Enter') $('pwdBtn').click(); });
+$('nameBtn').onclick = ()=>{
+  const v = $('nameInput').value.trim();
+  if(!v){ $('nameErr').textContent='请填写姓名'; return; }
+  ME = v; localStorage.setItem(ME_KEY, v); rememberName(v);
+  enterApp();
+};
+$('nameInput').addEventListener('keydown', e=>{ if(e.key==='Enter') $('nameBtn').click(); });
+
+function enterApp(){
+  $('gate').style.display='none'; $('app').style.display='block';
+  $('meLabel').textContent = ME;
+  $('tkPublisher').value = ME;
+  renderLegend();
+  refresh();
+}
+
+/* ═══════════════ 界面②：月历主界面 ═══════════════ */
+function shiftMonth(d){
+  let [y,m] = viewYM.split('-').map(Number);
+  m += d; if(m<1){m=12;y--;} if(m>12){m=1;y++;}
+  viewYM = y+'-'+pad(m); refresh();
+}
+$('prevM').onclick = ()=>shiftMonth(-1);
+$('nextM').onclick = ()=>shiftMonth(1);
+
+async function refresh(){
+  $('ymLabel').textContent = viewYM.replace('-',' 年 ')+' 月';
+  const flag = $('cloudFlag');
+  if(cloudOn()){ flag.className='cloud-flag on'; flag.textContent='☁ 云端共享'; }
+  else{ flag.className='cloud-flag off'; flag.textContent='⚠ 本机模式（未配置云存储）'; }
+  let records=[], tasks=[];
+  try{
+    [records, tasks] = await Promise.all([Store.monthRecords(viewYM), Store.monthTasks(viewYM)]);
+  }catch(e){ toast('数据加载失败：'+e.message, 3500); }
+  renderTasks(tasks);
+  renderCalendar(records);
+}
+
+function renderTasks(tasks){
+  const now = todayStr();
+  $('taskStrip').innerHTML = tasks.map(t=>{
+    const active = t.startDate<=now && now<=t.endDate;
+    return '<div class="task-item"><span class="ti-flag">'+(active?'📌':'🗓')+'</span>'+
+      '<div><div class="ti-t">'+esc(t.title)+'</div>'+
+      '<div class="ti-d">'+esc(t.startDate)+' ~ '+esc(t.endDate)+' · 发布人：'+esc(t.publisher)+'</div></div></div>';
+  }).join('');
+}
+
+function renderCalendar(records){
+  const [y,m] = viewYM.split('-').map(Number);
+  const days = new Date(y,m,0).getDate();
+  const now = todayStr();
+  const names = [...new Set(records.map(r=>r.name))].sort();
+  if(ME && !names.includes(ME)) names.unshift(ME);
+  $('emptyHint').style.display = records.length ? 'none' : 'block';
+
+  let h = '<table class="cal"><tr><th class="nm">姓名</th>';
+  for(let d=1; d<=days; d++){
+    const ds = y+'-'+pad(m)+'-'+pad(d);
+    const wd = '日一二三四五六'[new Date(y,m-1,d).getDay()];
+    h += '<th'+(ds===now?' class="today"':'')+'>'+d+'<div class="dw">'+wd+'</div></th>';
+  }
+  h += '</tr>';
+  const byName = {};
+  records.forEach(r=>{ (byName[r.name]=byName[r.name]||{})[r.date]=r; });
+  names.forEach(n=>{
+    h += '<tr'+(n===ME?' class="me"':'')+'><td class="nm">'+esc(n)+(n===ME?' ★':'')+'</td>';
+    for(let d=1; d<=days; d++){
+      const ds = y+'-'+pad(m)+'-'+pad(d);
+      const r = (byName[n]||{})[ds];
+      const dots = r ? r.statuses.map(s=>'<span class="dot" style="background:'+stColor(s)+'"></span>').join('') : '';
+      const wd2 = r && r.work ? '<span class="wdot"></span>' : '';
+      h += '<td class="cell" data-name="'+esc(n)+'" data-date="'+ds+'">'+wd2+'<div class="dots">'+dots+'</div></td>';
+    }
+    h += '</tr>';
+  });
+  h += '</table>';
+  $('calWrap').innerHTML = h;
+  $('calWrap').querySelectorAll('td.cell').forEach(td=>{
+    td.onclick = ()=>{
+      const n = td.dataset.name;
+      if(n !== ME){ toast('只能填写本人（'+ME+'）的打卡'); return; }
+      openCheckin(n, td.dataset.date, (byName[n]||{})[td.dataset.date]);
+    };
+  });
+}
+
+function renderLegend(){
+  $('legend').innerHTML = STATUSES.map(s=>
+    '<span><span class="dot" style="background:'+s.c+';width:10px;height:10px"></span>'+s.k+'</span>'
+  ).join('') + '<span><span class="wdot" style="position:static;display:inline-block"></span>含工作内容</span>';
+}
+
+/* ═══════════════ 界面③：打卡弹窗 ═══════════════ */
+let ckSel = new Set(), ckName='', ckDate='';
+function openCheckin(name, date, rec){
+  ckName=name; ckDate=date; ckSel = new Set(rec?rec.statuses:[]);
+  $('ckTitle').textContent = '打卡 · '+name+' · '+date;
+  $('ckWork').value = rec ? (rec.work||'') : '';
+  $('ckDel').style.display = rec ? 'block' : 'none';
+  $('ckMeta').textContent = rec && rec.updatedAt ? '上次更新：'+rec.updatedAt.replace('T',' ').slice(0,19) : '';
+  drawChips();
+  show('ckMask');
+}
+function drawChips(){
+  $('ckChips').innerHTML = STATUSES.map(s=>{
+    const on = ckSel.has(s.k);
+    return '<button type="button" class="chip'+(on?' on':'')+'" data-k="'+s.k+'"'+
+      (on?' style="background:'+s.c+'"':'')+'>'+s.k+'</button>';
+  }).join('');
+  $('ckChips').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
+    const k=b.dataset.k; ckSel.has(k)?ckSel.delete(k):ckSel.add(k); drawChips();
+  });
+}
+$('ckSave').onclick = async ()=>{
+  if(!ckSel.size){ toast('请至少选择一个考勤状态'); return; }
+  $('ckSave').disabled = true; $('ckSave').innerHTML='<span class="spin"></span> 保存中';
+  try{
+    await Store.saveRecord({name:ckName, date:ckDate, statuses:[...ckSel], work:$('ckWork').value.trim()});
+    hide('ckMask'); toast('已保存'); refresh();
+  }catch(e){ toast('保存失败：'+e.message, 3500); }
+  $('ckSave').disabled = false; $('ckSave').textContent='保存打卡';
+};
+$('ckDel').onclick = async ()=>{
+  if(!confirm('删除 '+ckName+' '+ckDate+' 的打卡记录？')) return;
+  try{ await Store.delRecord(ckName, ckDate); hide('ckMask'); toast('已删除'); refresh(); }
+  catch(e){ toast('删除失败：'+e.message, 3500); }
+};
+
+/* ═══════════════ 界面④：任务发布 / 列表 ═══════════════ */
+$('tkSave').onclick = async ()=>{
+  const t = { title:$('tkTitle').value.trim(), content:$('tkContent').value.trim(),
+    startDate:$('tkStart').value, endDate:$('tkEnd').value, publisher:$('tkPublisher').value.trim()||ME };
+  if(!t.title || !t.startDate || !t.endDate){ toast('请填写任务名称和起止日期'); return; }
+  if(t.endDate < t.startDate){ toast('结束日期不能早于开始日期'); return; }
+  $('tkSave').disabled = true;
+  try{
+    await Store.saveTask(t);
+    hide('taskMask'); toast('任务已发布');
+    $('tkTitle').value=''; $('tkContent').value='';
+    refresh();
+  }catch(e){ toast('发布失败：'+e.message, 3500); }
+  $('tkSave').disabled = false;
+};
+async function openTaskList(){
+  show('tlMask'); $('tlBody').innerHTML='<div style="text-align:center;color:var(--mut)"><span class="spin"></span></div>';
+  let tasks=[];
+  try{ tasks = await Store.monthTasks(viewYM); }catch(e){ toast('加载失败：'+e.message, 3000); }
+  $('tlBody').innerHTML = tasks.length ? tasks.map(t=>
+    '<div class="tl-item"><div class="t">'+esc(t.title)+'</div>'+
+    (t.content?'<div class="c">'+esc(t.content)+'</div>':'')+
+    '<div class="m">'+esc(t.startDate)+' ~ '+esc(t.endDate)+' · 发布人：'+esc(t.publisher)+
+    ' <a href="javascript:void 0" data-id="'+esc(t.id||'')+'" data-ca="'+esc(t.createdAt||'')+'" class="tl-del" style="color:#b02a37;margin-left:8px">删除</a></div></div>'
+  ).join('') : '<div style="text-align:center;color:var(--mut);padding:20px">本月暂无任务</div>';
+  $('tlBody').querySelectorAll('.tl-del').forEach(a=>a.onclick=async ()=>{
+    if(!confirm('删除该任务？')) return;
+    try{ await Store.delTask(a.dataset.id, a.dataset.ca); openTaskList(); refresh(); }
+    catch(e){ toast('删除失败：'+e.message, 3000); }
+  });
+}
+
+/* ═══════════════ 界面⑤：月汇总 + 导出 ═══════════════ */
+function openSummary(){
+  const [y,m] = viewYM.split('-').map(Number);
+  const ys = $('sumYear'); ys.innerHTML='';
+  for(let i=y-3;i<=y+1;i++) ys.innerHTML += '<option'+(i===y?' selected':'')+'>'+i+'</option>';
+  const ms = $('sumMonth'); ms.innerHTML='';
+  for(let i=1;i<=12;i++) ms.innerHTML += '<option'+(i===m?' selected':'')+'>'+i+'</option>';
+  show('sumMask'); buildSummary();
+}
+$('sumYear').onchange = buildSummary;
+$('sumMonth').onchange = buildSummary;
+
+let sumData = null; // {ym, names, days, recs}
+async function buildSummary(){
+  const ym = $('sumYear').value+'-'+pad(+$('sumMonth').value);
+  $('sumBody').innerHTML='<div style="text-align:center;padding:16px"><span class="spin"></span></div>';
+  let recs=[];
+  try{ recs = await Store.monthRecords(ym); }catch(e){ toast('加载失败：'+e.message, 3000); }
+  const names = [...new Set(recs.map(r=>r.name))].sort();
+  const days = new Date(+ym.slice(0,4), +ym.slice(5,7), 0).getDate();
+  sumData = {ym, names, days, recs};
+  if(!names.length){ $('sumBody').innerHTML='<div style="text-align:center;color:var(--mut);padding:18px">该月暂无打卡数据</div>'; return; }
+  let h='<table class="sum"><tr><th>姓名</th><th>打卡天数</th>'+
+    STATUSES.map(s=>'<th>'+s.k+'</th>').join('')+'</tr>';
+  names.forEach(n=>{
+    const mine = recs.filter(r=>r.name===n);
+    const cnt = k => mine.filter(r=>r.statuses.includes(k)).length;
+    h += '<tr><td>'+esc(n)+'</td><td>'+mine.length+'</td>'+
+      STATUSES.map(s=>'<td>'+(cnt(s.k)||'')+'</td>').join('')+'</tr>';
+  });
+  h += '</table>';
+  h += '<div class="f-label" style="margin-top:16px">每日工作内容明细</div>';
+  h += '<table class="sum"><tr><th>姓名</th><th>日期</th><th>状态</th><th>工作内容</th></tr>';
+  recs.slice().sort((a,b)=>a.date<b.date?-1:1).forEach(r=>{
+    h += '<tr><td>'+esc(r.name)+'</td><td>'+r.date+'</td><td>'+esc(r.statuses.join('、'))+'</td><td class="l">'+esc(r.work||'')+'</td></tr>';
+  });
+  h += '</table>';
+  $('sumBody').innerHTML = h;
+}
+
+/* ── Excel 导出（无需外库：SpreadsheetML .xls）── */
+$('expExcel').onclick = ()=>{
+  if(!sumData || !sumData.names.length){ toast('该月暂无数据可导出'); return; }
+  const {ym, names, recs} = sumData;
+  const xesc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const cell = (v,st) => '<Cell'+(st?' ss:StyleID="'+st+'"':'')+'><Data ss:Type="'+(typeof v==='number'?'Number':'String')+'">'+xesc(v)+'</Data></Cell>';
+  let rows = '';
+  rows += '<Row>'+cell('汉江局技术管理室 '+ym.replace('-','年')+'月 考勤汇总表','t')+'</Row>';
+  rows += '<Row></Row>';
+  rows += '<Row>'+['姓名','打卡天数',...STATUSES.map(s=>s.k)].map(v=>cell(v,'h')).join('')+'</Row>';
+  names.forEach(n=>{
+    const mine = recs.filter(r=>r.name===n);
+    const cnt = k => mine.filter(r=>r.statuses.includes(k)).length;
+    rows += '<Row>'+cell(n,'h')+cell(mine.length)+STATUSES.map(s=>cell(cnt(s.k)||'')).join('')+'</Row>';
+  });
+  rows += '<Row></Row><Row>'+cell('每日工作内容明细','t')+'</Row>';
+  rows += '<Row>'+['姓名','日期','状态','工作内容'].map(v=>cell(v,'h')).join('')+'</Row>';
+  recs.slice().sort((a,b)=>a.date<b.date?-1:1).forEach(r=>{
+    rows += '<Row>'+cell(r.name)+cell(r.date)+cell(r.statuses.join('、'))+cell(r.work||'')+'</Row>';
+  });
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n'+
+    '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'+
+    '<Styles>'+
+    '<Style ss:ID="t"><Font ss:Bold="1" ss:Size="14"/></Style>'+
+    '<Style ss:ID="h"><Font ss:Bold="1"/><Interior ss:Color="#EEF3F8" ss:Pattern="Solid"/><Borders>'+
+    '<Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>'+
+    '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'+
+    '<Style ss:ID="Default"><Borders>'+
+    '<Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>'+
+    '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'+
+    '</Styles>'+
+    '<Worksheet ss:Name="月考勤汇总"><Table ss:DefaultRowHeight="18">'+rows+'</Table></Worksheet></Workbook>';
+  const blob = new Blob(['﻿'+xml], {type:'application/vnd.ms-excel'});
+  dl(blob, '汉江局技术管理室_'+ym+'_考勤汇总.xls');
+  toast('Excel 已导出');
+};
+function dl(blob, name){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 800);
+}
+
+/* ── PDF 导出（打印视图，浏览器另存为 PDF）── */
+$('expPdf').onclick = ()=>{
+  if(!sumData || !sumData.names.length){ toast('该月暂无数据可导出'); return; }
+  const {ym, names, recs} = sumData;
+  let h = '<h2 style="text-align:center">汉江局技术管理室 '+ym.replace('-',' 年 ')+' 月 考勤汇总表</h2>';
+  h += '<table><tr><th>姓名</th><th>打卡天数</th>'+STATUSES.map(s=>'<th>'+s.k+'</th>').join('')+'</tr>';
+  names.forEach(n=>{
+    const mine = recs.filter(r=>r.name===n);
+    const cnt = k => mine.filter(r=>r.statuses.includes(k)).length;
+    h += '<tr><td>'+esc(n)+'</td><td>'+mine.length+'</td>'+STATUSES.map(s=>'<td>'+(cnt(s.k)||'')+'</td>').join('')+'</tr>';
+  });
+  h += '</table><h3>每日工作内容明细</h3><table><tr><th>姓名</th><th>日期</th><th>状态</th><th>工作内容</th></tr>';
+  recs.slice().sort((a,b)=>a.date<b.date?-1:1).forEach(r=>{
+    h += '<tr><td>'+esc(r.name)+'</td><td>'+r.date+'</td><td>'+esc(r.statuses.join('、'))+'</td><td style="text-align:left">'+esc(r.work||'')+'</td></tr>';
+  });
+  h += '</table>';
+  const w = window.open('', '_blank');
+  w.document.write('<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>考勤汇总 '+ym+'</title>'+
+    '<style>body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;padding:24px;color:#1f2d3d}'+
+    'table{border-collapse:collapse;width:100%;font-size:12px;margin-bottom:18px}'+
+    'th,td{border:1px solid #8fa2b5;padding:5px 6px;text-align:center}th{background:#eef3f8}</style></head>'+
+    '<body>'+h+'<script>window.onload=function(){window.print()}<\/script></body></html>');
+  w.document.close();
+};
+
+/* ═══════════════ 菜单 / 设置 ═══════════════ */
+$('menuBtn').onclick = ()=>{ show('menu'); show('menuMask'); };
+$('menuMask').onclick = closeMenu;
+function closeMenu(){ hide('menu'); hide('menuMask'); }
+document.querySelectorAll('#menu .mi').forEach(b=>b.onclick=()=>{
+  closeMenu();
+  const act = b.dataset.act;
+  if(act==='pubTask'){ const t=todayStr(); $('tkStart').value=$('tkStart').value||t; $('tkEnd').value=$('tkEnd').value||t; show('taskMask'); }
+  else if(act==='taskList') openTaskList();
+  else if(act==='summary') openSummary();
+  else if(act==='switchName'){ $('app').style.display='none'; showGate(); }
+  else if(act==='settings') openSettings();
+  else if(act==='lock'){ sessionStorage.removeItem(AUTH_KEY); location.reload(); }
+});
+function openSettings(){
+  const c = lcConf()||{};
+  $('lcAppId').value=c.appId||''; $('lcAppKey').value=c.appKey||''; $('lcServer').value=c.server||'';
+  show('setMask');
+}
+$('lcSave').onclick = async ()=>{
+  const c = {appId:$('lcAppId').value.trim(), appKey:$('lcAppKey').value.trim(), server:$('lcServer').value.trim()};
+  if(!c.appId||!c.appKey||!c.server){ toast('三项都需填写'); return; }
+  localStorage.setItem(LC_KEY, JSON.stringify(c));
+  $('lcSave').disabled=true; $('lcSave').innerHTML='<span class="spin"></span> 测试连接';
+  try{ await lcReq('GET','classes/AttRecord?limit=1'); toast('连接成功，已切换为云端共享'); hide('setMask'); refresh(); }
+  catch(e){ toast('连接失败：'+e.message, 4000); }
+  $('lcSave').disabled=false; $('lcSave').textContent='保存并测试';
+};
+$('lcClear').onclick = ()=>{
+  localStorage.removeItem(LC_KEY);
+  $('lcAppId').value=''; $('lcAppKey').value=''; $('lcServer').value='';
+  toast('已清除云配置，回到本机模式'); hide('setMask'); refresh();
+};
+
+/* ═══════════════ 小工具 ═══════════════ */
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function show(id){ $(id).style.display = id==='menu'||id==='menuMask' ? 'block' : 'flex'; }
+function hide(id){ $(id).style.display='none'; }
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>hide(b.dataset.close));
+document.querySelectorAll('.modal-mask').forEach(m=>m.addEventListener('click', e=>{ if(e.target===m) hide(m.id); }));
+
+/* ═══════════════ 启动 ═══════════════ */
+if(sessionStorage.getItem(AUTH_KEY)==='1' && ME){ enterApp(); }
+else showGate();
+</script>
+</body>
+</html>

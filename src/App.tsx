@@ -4,6 +4,7 @@ import PasswordGate from '@/portal/PasswordGate';
 import PortalHome from '@/portal/PortalHome';
 import RatingTool from '@/tools/rating/RatingTool';
 import FlowTool from '@/tools/flow/FlowTool';
+import AttendanceTool from '@/tools/attendance/AttendanceTool';
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
         <Route path="/" element={<PortalHome />} />
         <Route path="/rating-curve" element={<RatingTool />} />
         <Route path="/flow-discharge" element={<FlowTool />} />
+        <Route path="/attendance" element={<AttendanceTool />} />
         <Route path="*" element={<PortalHome />} />
       </Routes>
     </PasswordGate>

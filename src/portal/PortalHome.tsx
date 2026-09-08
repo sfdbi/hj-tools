@@ -29,8 +29,15 @@ const TOOLS: ToolCard[] = [
     path: '/flow-discharge',
     tags: ['流量测验', '推流', '成果导出'],
   },
+  {
+    key: 'attendance',
+    name: '考勤工具',
+    desc: '日常按天打卡（状态多选+工作内容）、指定人员发布任务、按年月导出月考勤表（Excel/PDF），多人云端共享，独立密码进入。',
+    icon: '📋',
+    path: '/attendance',
+    tags: ['考勤打卡', '任务发布', '独立密码'],
+  },
   // 预留窗口：后续工具在此追加
-  { key: 'slot-2', name: '预留工具窗口', desc: '后续工具将部署于此，敬请期待。', icon: '🧰' },
   { key: 'slot-3', name: '预留工具窗口', desc: '后续工具将部署于此，敬请期待。', icon: '📊' },
   { key: 'slot-4', name: '预留工具窗口', desc: '后续工具将部署于此，敬请期待。', icon: '🗂️' },
 ];
