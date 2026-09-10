@@ -165,6 +165,28 @@ table.sum td.l{text-align:left;white-space:normal;min-width:120px;}
 .work-line .s{flex-shrink:0;color:var(--mut);font-size:11px;max-width:120px;}
 .work-line .w{color:var(--ink);word-break:break-all;}
 footer.foot{text-align:center;font-size:11px;color:#9db0c2;padding:16px 0 26px;}
+
+/* ── 小屏手机适配 ── */
+@media(max-width:480px){
+  html,body{font-size:14px;}
+  .gate-card{padding:26px 20px;}
+  header.bar{padding:8px 8px;gap:5px;}
+  header.bar .tt{font-size:14px;}
+  header.bar .tt small{display:none;}
+  .month-nav .ym{min-width:72px;font-size:13px;}
+  .month-nav button{padding:4px 8px;font-size:15px;}
+  .icon-btn{width:34px;height:34px;}
+  .task-strip{margin:8px 8px 0;}
+  .cal-wrap{margin:8px;}
+  table.cal th{min-width:29px;height:36px;font-size:11px;}
+  table.cal td.cell{min-width:29px;height:42px;}
+  table.cal td.nm,table.cal th.nm{min-width:62px;max-width:80px;font-size:12px;padding:0 5px;}
+  .legend{margin:0 8px 10px;gap:7px;font-size:11px;}
+  .menu{width:218px;}
+  .chip{padding:8px 13px;font-size:13px;}
+  .modal .mbd{padding:13px 14px;}
+  .btn{padding:11px;font-size:14px;}
+}
 </style>
 </head>
 <body>
@@ -232,6 +254,7 @@ footer.foot{text-align:center;font-size:11px;color:#9db0c2;padding:16px 0 26px;}
   <button class="mi" data-act="summary"><span class="ic">📊</span>月汇总 / 导出</button>
   <button class="mi" data-act="switchName"><span class="ic">🔁</span>切换打卡人</button>
   <button class="mi" data-act="settings"><span class="ic">⚙️</span>云存储设置</button>
+  <button class="mi" data-act="chpwd" id="miChpwd" style="display:none"><span class="ic">🔑</span>修改门禁密码</button>
   <button class="mi" data-act="lock"><span class="ic">🔒</span>退出并锁定</button>
 </div>
 
@@ -314,6 +337,54 @@ footer.foot{text-align:center;font-size:11px;color:#9db0c2;padding:16px 0 26px;}
   </div>
 </div>
 
+<!-- 任务详情 -->
+<div id="tdMask" class="modal-mask" style="display:none">
+  <div class="modal">
+    <div class="mhd"><span class="mt">📌 任务详情</span><button class="mx" data-close="tdMask">×</button></div>
+    <div class="mbd">
+      <div style="font-size:17px;font-weight:700" id="tdTitle"></div>
+      <div class="f-label">任务内容</div>
+      <div style="font-size:14px;white-space:pre-wrap;line-height:1.7" id="tdContent"></div>
+      <div class="f-label">起止时间 · 发布人</div>
+      <div style="font-size:13px;color:var(--mut)" id="tdMeta"></div>
+    </div>
+  </div>
+</div>
+
+<!-- APP 版本更新提示 -->
+<div id="updMask" class="modal-mask" style="display:none">
+  <div class="modal">
+    <div class="mhd"><span class="mt">🚀 发现新版本</span><button class="mx" data-close="updMask">×</button></div>
+    <div class="mbd" style="text-align:center;padding:26px 18px">
+      <div style="font-size:15px;line-height:2">考勤工具有新版本（<b id="updNew"></b>）<br>
+      <span style="font-size:13px;color:var(--mut)">请下载更新以获得最新功能与修复</span></div>
+    </div>
+    <div class="mft">
+      <button class="btn btn-ghost" data-close="updMask" style="flex:0 0 110px">暂不更新</button>
+      <button class="btn btn-gold" id="updBtn">下载更新</button>
+    </div>
+  </div>
+</div>
+
+<!-- 修改门禁密码（郑宇专属） -->
+<div id="pwMask" class="modal-mask" style="display:none">
+  <div class="modal">
+    <div class="mhd"><span class="mt">🔑 修改门禁密码</span><button class="mx" data-close="pwMask">×</button></div>
+    <div class="mbd">
+      <div style="font-size:13px;color:var(--mut);line-height:1.7;background:#fff8e6;border:1px solid #ecd98f;border-radius:10px;padding:10px 12px;">
+        仅管理员（郑宇）可操作。新密码保存在云端，修改后<b>对所有设备立即生效</b>，请及时告知科室成员。
+      </div>
+      <div class="f-label">新密码</div>
+      <input class="f-input" id="np1" type="password" autocomplete="off" placeholder="至少 4 位">
+      <div class="f-label">确认新密码</div>
+      <input class="f-input" id="np2" type="password" autocomplete="off">
+    </div>
+    <div class="mft">
+      <button class="btn btn-pri" id="npSave">保存新密码</button>
+    </div>
+  </div>
+</div>
+
 <!-- 云存储设置 -->
 <div id="setMask" class="modal-mask" style="display:none">
   <div class="modal">
@@ -340,10 +411,10 @@ footer.foot{text-align:center;font-size:11px;color:#9db0c2;padding:16px 0 26px;}
 <script>
 'use strict';
 /* ═══════════════ 基础常量 ═══════════════ */
-const PWD_HASH = 'f7363f31b073e49a678b4bd5a59d69f8ecf9ad66d111b90cc52f1beae1dedcc7'; // SHA-256(工具独立密码)
+const PWD_HASH = 'fbebfd9e6b1fefcf01128460110de5be5493b5e409a252b772213b7c0c341ff1'; // SHA-256(默认门禁密码 JS302)，郑宇可在云端改密
 const AUTH_KEY = 'hj-att-auth', ME_KEY = 'hj-att-name', NAMES_KEY = 'hj-att-names', LC_KEY = 'hj-att-lc';
 const STATUSES = [
-  {k:'出勤', sym:'√', c:'#22a06b'},
+  {k:'出勤', sym:'✓', c:'#22a06b'},
   {k:'加班', sym:'J', c:'#e08a1e'},
   {k:'驻测', sym:'Z', c:'#2f7fd0'},
   {k:'出工', sym:'C', c:'#17a2b8'},
@@ -545,11 +616,24 @@ async function initNameStep(){
   $('nameChips').innerHTML = names.map(n=>'<button type="button">'+esc(n)+'</button>').join('');
   $('nameChips').querySelectorAll('button').forEach(b=>b.onclick=()=>{ $('nameInput').value=b.textContent; });
 }
+/* 门禁密码：云端 config.json 中有自定义哈希时优先生效（郑宇可改），否则用默认 JS302 */
+async function currentPwdHash(){
+  if(cloudOn()){
+    try{
+      const f = await ghRead('config.json');
+      if(f && f.obj && f.obj.pwdHash) return f.obj.pwdHash;
+    }catch(e){}
+  }
+  return PWD_HASH;
+}
 $('pwdBtn').onclick = async ()=>{
   const v = $('pwdInput').value.trim();
   if(!v) return;
-  if(await sha256Hex(v) === PWD_HASH){
+  $('pwdErr').textContent='验证中…';
+  const hash = await sha256Hex(v);
+  if(hash === await currentPwdHash()){
     sessionStorage.setItem(AUTH_KEY,'1');
+    $('pwdErr').textContent='';
     $('gate-pwd').style.display='none'; $('gate-name').style.display='block';
     initNameStep();
   } else { $('pwdErr').textContent='密码错误'; $('pwdInput').value=''; }
@@ -567,8 +651,10 @@ function enterApp(){
   $('gate').style.display='none'; $('app').style.display='block';
   $('meLabel').textContent = ME;
   $('tkPublisher').value = ME;
+  $('miChpwd').style.display = (ME==='郑宇') ? 'flex' : 'none'; // 郑宇专属：修改门禁密码
   renderLegend();
   refresh();
+  checkUpdate();
 }
 
 /* ═══════════════ 界面②：月历主界面 ═══════════════ */
@@ -593,14 +679,25 @@ async function refresh(){
   renderCalendar(records);
 }
 
+let stripTasks = [];
 function renderTasks(tasks){
+  stripTasks = tasks;
   const now = todayStr();
-  $('taskStrip').innerHTML = tasks.map(t=>{
+  $('taskStrip').innerHTML = tasks.map((t,i)=>{
     const active = t.startDate<=now && now<=t.endDate;
-    return '<div class="task-item"><span class="ti-flag">'+(active?'📌':'🗓')+'</span>'+
-      '<div><div class="ti-t">'+esc(t.title)+'</div>'+
-      '<div class="ti-d">'+esc(t.startDate)+' ~ '+esc(t.endDate)+' · 发布人：'+esc(t.publisher)+'</div></div></div>';
+    return '<div class="task-item" data-i="'+i+'" style="cursor:pointer" title="点击查看任务详情"><span class="ti-flag">'+(active?'📌':'🗓')+'</span>'+
+      '<div style="flex:1"><div class="ti-t">'+esc(t.title)+'</div>'+
+      '<div class="ti-d">'+esc(t.startDate)+' ~ '+esc(t.endDate)+' · 发布人：'+esc(t.publisher)+'</div></div>'+
+      '<span style="color:#b8a25a;font-size:12px;flex-shrink:0">详情 ›</span></div>';
   }).join('');
+  $('taskStrip').querySelectorAll('.task-item').forEach(el=>el.onclick=()=>openTaskDetail(+el.dataset.i));
+}
+function openTaskDetail(i){
+  const t = stripTasks[i]; if(!t) return;
+  $('tdTitle').textContent = t.title;
+  $('tdContent').textContent = t.content || '（未填写任务内容）';
+  $('tdMeta').textContent = t.startDate+' ~ '+t.endDate+' · 发布人：'+t.publisher;
+  show('tdMask');
 }
 
 function renderCalendar(records){
@@ -951,8 +1048,22 @@ document.querySelectorAll('#menu .mi').forEach(b=>b.onclick=()=>{
   else if(act==='summary') openSummary();
   else if(act==='switchName'){ $('app').style.display='none'; showGate(); }
   else if(act==='settings') openSettings();
+  else if(act==='chpwd'){ $('np1').value=''; $('np2').value=''; show('pwMask'); }
   else if(act==='lock'){ sessionStorage.removeItem(AUTH_KEY); location.reload(); }
 });
+$('npSave').onclick = async ()=>{
+  const v1 = $('np1').value, v2 = $('np2').value;
+  if(v1.length < 4){ toast('新密码至少 4 位'); return; }
+  if(v1 !== v2){ toast('两次输入不一致'); return; }
+  if(!cloudOn()){ toast('需先在「云存储设置」中配置令牌，新密码才能同步到所有设备'); return; }
+  $('npSave').disabled = true; $('npSave').innerHTML='<span class="spin"></span> 保存中';
+  try{
+    const h = await sha256Hex(v1);
+    await ghUpdate('config.json', {}, o=>{ o.pwdHash = h; }, '修改门禁密码');
+    hide('pwMask'); toast('门禁密码已修改，所有设备同步生效', 3000);
+  }catch(e){ toast('保存失败：'+e.message, 3500); }
+  $('npSave').disabled = false; $('npSave').textContent='保存新密码';
+};
 function openSettings(){
   const c = ghConf()||{};
   $('ghToken').value=c.token||''; $('ghRepo').value=c.repo||'sfdbi/hj-attendance-data';
@@ -973,6 +1084,23 @@ $('ghClear').onclick = ()=>{
   localStorage.removeItem(LC_KEY);
   $('ghToken').value=''; $('ghRepo').value='sfdbi/hj-attendance-data';
   toast('已清除云配置，回到本机模式'); hide('setMask'); refresh();
+};
+
+/* ═══════════════ APP 版本更新检查（仅安卓壳内生效） ═══════════════ */
+const APP_VER = '2026.09.10';
+async function checkUpdate(){
+  if(!window.AndroidSaver) return; // 仅在 APP 中检查
+  try{
+    const r = await fetch('https://sfdbi.github.io/hj-tools/apk/version.json?_='+Date.now());
+    const v = await r.json();
+    if(v.version && v.version !== APP_VER){
+      $('updNew').textContent = v.version + '（当前 '+APP_VER+'）';
+      show('updMask');
+    }
+  }catch(e){}
+}
+$('updBtn').onclick = ()=>{
+  location.href = 'https://sfdbi.github.io/hj-tools/apk/attendance.apk';
 };
 
 /* ═══════════════ 小工具 ═══════════════ */
