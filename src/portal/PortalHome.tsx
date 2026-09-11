@@ -39,8 +39,15 @@ const TOOLS: ToolCard[] = [
     tags: ['考勤打卡', '任务发布', '独立密码'],
     apk: './apk/attendance.apk',
   },
+  {
+    key: 'hadcp',
+    name: 'H-ADCP 在线推流数据处理',
+    desc: 'H-ADCP 原始数据转换与合并、实测流速反算、逐 Cell 时间内插、关系模型构建及批量在线推流，全流程在浏览器本地完成。',
+    icon: '📡',
+    path: '/hadcp',
+    tags: ['H-ADCP', '时间匹配', '模型推流'],
+  },
   // 预留窗口：后续工具在此追加
-  { key: 'slot-3', name: '预留工具窗口', desc: '后续工具将部署于此，敬请期待。', icon: '📊' },
   { key: 'slot-4', name: '预留工具窗口', desc: '后续工具将部署于此，敬请期待。', icon: '🗂️' },
 ];
 
