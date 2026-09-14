@@ -10,6 +10,7 @@ interface ToolCard {
   path?: string; // 有路径表示已上线
   tags?: string[];
   apk?: string; // 安卓安装包下载地址
+  windowsInstaller?: string; // Windows EXE 安装包下载地址
 }
 
 // ── 工具注册表：后续新增工具只需在此追加条目 ──
@@ -46,6 +47,8 @@ const TOOLS: ToolCard[] = [
     icon: '📡',
     path: '/hadcp',
     tags: ['H-ADCP', '时间匹配', '模型推流'],
+    windowsInstaller:
+      'https://github.com/sfdbi/hj-tools/releases/download/hadcp-v0.2.4.2/HADCP-Setup-0.2.4.2.exe',
   },
   // 预留窗口：后续工具在此追加
   { key: 'slot-4', name: '预留工具窗口', desc: '后续工具将部署于此，敬请期待。', icon: '🗂️' },
@@ -118,6 +121,16 @@ export default function PortalHome() {
                     className="flex items-center justify-center gap-1.5 rounded-lg border border-[#d4af37]/40 bg-[#12395c]/60 py-1.5 text-xs text-[#e6c15a] transition hover:bg-[#1a4a74]"
                   >
                     📱 安卓版 APP 下载（APK）
+                  </a>
+                )}
+                {t.windowsInstaller && (
+                  <a
+                    href={t.windowsInstaller}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-center gap-1.5 rounded-lg border border-[#d4af37]/40 bg-[#12395c]/60 py-1.5 text-xs text-[#e6c15a] transition hover:bg-[#1a4a74]"
+                  >
+                    💻 Windows 版下载（EXE 安装包）
                   </a>
                 )}
               </div>
