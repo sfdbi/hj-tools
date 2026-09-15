@@ -137,6 +137,19 @@ textarea.f-input{min-height:88px;resize:vertical;}
 .tl-item .c{font-size:13px;color:var(--ink);margin-top:4px;white-space:pre-wrap;}
 .tl-item .m{font-size:12px;color:var(--mut);margin-top:6px;}
 
+/* 意见反馈 */
+.fb-item{border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:10px;background:#fff;}
+.fb-item .fh{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--mut);flex-wrap:wrap;}
+.fb-cat{font-size:11px;padding:2px 8px;border-radius:999px;color:#fff;flex-shrink:0;}
+.fb-item .fc{font-size:13.5px;margin-top:6px;white-space:pre-wrap;line-height:1.6;word-break:break-all;}
+.fb-status{font-size:11px;padding:2px 8px;border-radius:999px;flex-shrink:0;margin-left:auto;}
+.fb-status.wait{background:#fdf3e0;color:#a87b13;border:1px solid #eed9a4;}
+.fb-status.done{background:#e4f6ec;color:#157347;border:1px solid #b7e4c7;}
+.fb-reply{margin-top:8px;border-left:3px solid var(--gold);background:#fbf7ea;border-radius:0 8px 8px 0;
+  padding:8px 10px;font-size:13px;white-space:pre-wrap;line-height:1.6;word-break:break-all;}
+.fb-reply .rt{font-size:11px;color:#a87b13;margin-bottom:3px;}
+.menu-badge{margin-left:auto;background:#d9534f;color:#fff;font-size:11px;border-radius:999px;padding:1px 8px;}
+
 /* 汇总表 */
 table.sum{border-collapse:collapse;width:100%;font-size:12px;background:#fff;}
 table.sum th,table.sum td{border:1px solid #cfd9e4;padding:6px 5px;text-align:center;white-space:nowrap;}
@@ -252,6 +265,7 @@ footer.foot{text-align:center;font-size:11px;color:#9db0c2;padding:16px 0 26px;}
   <button class="mi" data-act="pubTask"><span class="ic">📝</span>发布任务</button>
   <button class="mi" data-act="taskList"><span class="ic">📑</span>任务列表</button>
   <button class="mi" data-act="summary"><span class="ic">📊</span>月汇总 / 导出</button>
+  <button class="mi" data-act="feedback"><span class="ic">💬</span>意见反馈<span id="fbMenuBadge" class="menu-badge" style="display:none"></span></button>
   <button class="mi" data-act="switchName"><span class="ic">🔁</span>切换打卡人</button>
   <button class="mi" data-act="settings"><span class="ic">⚙️</span>云存储设置</button>
   <button class="mi" data-act="chpwd" id="miChpwd" style="display:none"><span class="ic">🔑</span>修改门禁密码</button>
@@ -304,6 +318,29 @@ footer.foot{text-align:center;font-size:11px;color:#9db0c2;padding:16px 0 26px;}
   <div class="modal">
     <div class="mhd"><span class="mt">📑 任务列表</span><button class="mx" data-close="tlMask">×</button></div>
     <div class="mbd" id="tlBody"></div>
+  </div>
+</div>
+
+<!-- ═══════ 界面⑥：意见反馈与需求探讨（云端实时共享） ═══════ -->
+<div id="fbMask" class="modal-mask" style="display:none">
+  <div class="modal">
+    <div class="mhd"><span class="mt">💬 意见反馈与需求探讨</span>
+      <button id="fbRefresh" style="margin-left:auto;font-size:12px;color:var(--blue);padding:2px 8px">刷新</button>
+      <button class="mx" data-close="fbMask" style="margin-left:0">×</button>
+    </div>
+    <div class="mbd">
+      <div class="f-label">反馈类型</div>
+      <div class="chips" id="fbCats"></div>
+      <div class="f-label">内容（问题现象 / 优化建议 / 功能需求）</div>
+      <textarea class="f-input" id="fbContent" placeholder="尽量描述清楚：哪个工具、什么操作、期望达到的效果…"></textarea>
+      <div class="f-label" style="display:flex;align-items:center">提交人
+        <span style="margin-left:auto;font-size:12px;color:#9db0c2" id="fbCloudHint"></span>
+      </div>
+      <input class="f-input" id="fbName" placeholder="你的姓名">
+      <button class="btn btn-gold" id="fbSubmit" style="width:100%;margin-top:12px">提交反馈</button>
+      <div class="f-label" style="margin-top:18px">全部反馈（云存储共享，回复实时同步）</div>
+      <div id="fbList"></div>
+    </div>
   </div>
 </div>
 
@@ -677,6 +714,7 @@ async function refresh(){
   }catch(e){ toast('数据加载失败：'+e.message, 3500); }
   renderTasks(tasks);
   renderCalendar(records);
+  updateFbBadge(); // 刷新反馈菜单角标（我的反馈有新回复时提示）
 }
 
 let stripTasks = [];
@@ -1036,6 +1074,95 @@ $('expPdf').onclick = ()=>{
   w.document.close();
 };
 
+/* ═══════════════ 意见反馈与需求探讨（复用考勤云端共享通道） ═══════════════ */
+const FB_CATS = [
+  {k:'bug',  t:'运行错误',   c:'#d9534f'},
+  {k:'opt',  t:'优化建议',   c:'#2f7fd0'},
+  {k:'use',  t:'实用性建议', c:'#8a63d2'},
+  {k:'need', t:'新功能需求', c:'#1fa8a0'},
+];
+const fbCat = k => FB_CATS.find(c=>c.k===k) || FB_CATS[1];
+const FB_SEEN_KEY = 'hj-att-fb-seen', FB_LOCAL_KEY = 'hj-att-feedback';
+let fbItems = [], fbCatSel = 'bug', fbTimer = null;
+
+async function fbLoad(){
+  if(cloudOn()){
+    const f = await ghRead('feedback.json');
+    return (f && f.obj && Array.isArray(f.obj.items)) ? f.obj.items : [];
+  }
+  try{ return JSON.parse(localStorage.getItem(FB_LOCAL_KEY)||'[]'); }catch(e){ return []; }
+}
+async function fbPush(item){
+  if(cloudOn()){
+    await ghUpdate('feedback.json', {version:1,items:[]}, o=>{ (o.items=o.items||[]).push(item); }, '意见反馈 [skip announcement]');
+  }else{
+    const a = await fbLoad(); a.push(item);
+    localStorage.setItem(FB_LOCAL_KEY, JSON.stringify(a));
+  }
+}
+function drawFbCats(){
+  $('fbCats').innerHTML = FB_CATS.map(c=>
+    '<button type="button" class="chip'+(c.k===fbCatSel?' on':'')+'" data-k="'+c.k+'"'+
+    (c.k===fbCatSel?' style="background:'+c.c+'"':'')+'>'+c.t+'</button>').join('');
+  $('fbCats').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{ fbCatSel=b.dataset.k; drawFbCats(); });
+}
+async function fbRender(silent){
+  if(!silent) $('fbList').innerHTML = '<div style="text-align:center;color:var(--mut);font-size:13px;padding:14px">读取中…</div>';
+  $('fbCloudHint').textContent = cloudOn() ? '☁ 云端共享中' : '⚠ 本机模式（配置云存储后多人实时共享）';
+  try{ fbItems = await fbLoad(); }
+  catch(e){ $('fbList').innerHTML='<div style="color:#b02a37;font-size:13px">读取失败：'+esc(e.message)+'</div>'; return; }
+  const sorted = [...fbItems].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  $('fbList').innerHTML = sorted.length ? sorted.map(it=>{
+    const c = fbCat(it.category);
+    const replied = it.reply && it.reply.content;
+    return '<div class="fb-item"><div class="fh"><span class="fb-cat" style="background:'+c.c+'">'+c.t+'</span>'+
+      '<b style="color:var(--ink)">'+esc(it.name||'匿名')+'</b><span>'+esc(String(it.createdAt||'').replace('T',' ').slice(0,16))+'</span>'+
+      '<span class="fb-status '+(replied?'done':'wait')+'">'+(replied?'已回复':'待回复')+'</span></div>'+
+      '<div class="fc">'+esc(it.content)+'</div>'+
+      (replied ? '<div class="fb-reply"><div class="rt">管理室回复 · '+esc(String(it.reply.repliedAt||'').replace('T',' ').slice(0,16))+'</div>'+esc(it.reply.content)+'</div>' : '')+
+      '</div>';
+  }).join('') : '<div style="text-align:center;color:var(--mut);font-size:13px;padding:14px">暂无反馈，来提第一条吧</div>';
+}
+async function openFeedback(){
+  $('fbName').value = ME || '';
+  $('fbContent').value = '';
+  drawFbCats();
+  show('fbMask');
+  localStorage.setItem(FB_SEEN_KEY, new Date().toISOString());
+  updateFbBadge();
+  await fbRender();
+  clearInterval(fbTimer);
+  fbTimer = setInterval(()=>{ // 打开期间每 20 秒拉取一次，近实时共享
+    if($('fbMask').style.display==='none'){ clearInterval(fbTimer); fbTimer=null; return; }
+    fbRender(true);
+  }, 20000);
+}
+$('fbRefresh').onclick = ()=>fbRender();
+$('fbSubmit').onclick = async ()=>{
+  const content = $('fbContent').value.trim();
+  const name = $('fbName').value.trim() || ME || '匿名';
+  if(!content){ toast('请填写反馈内容'); return; }
+  $('fbSubmit').disabled=true; $('fbSubmit').innerHTML='<span class="spin"></span> 提交中';
+  try{
+    await fbPush({ id:'fb_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+      category:fbCatSel, name, content, createdAt:new Date().toISOString(), reply:null });
+    $('fbContent').value='';
+    toast('反馈已提交，感谢！');
+    fbRender(true);
+  }catch(e){ toast('提交失败：'+e.message, 3500); }
+  $('fbSubmit').disabled=false; $('fbSubmit').textContent='提交反馈';
+};
+/* 菜单角标：我的反馈有新回复时显示数量 */
+async function updateFbBadge(){
+  const b = $('fbMenuBadge'); if(!b) return;
+  try{
+    const items = await fbLoad();
+    const seen = localStorage.getItem(FB_SEEN_KEY)||'';
+    const n = items.filter(it=> it.reply && it.reply.repliedAt && it.reply.repliedAt > seen && (!ME || it.name===ME)).length;
+    b.style.display = n ? '' : 'none'; b.textContent = n;
+  }catch(e){ b.style.display='none'; }
+}
+
 /* ═══════════════ 菜单 / 设置 ═══════════════ */
 $('menuBtn').onclick = ()=>{ show('menu'); show('menuMask'); };
 $('menuMask').onclick = closeMenu;
@@ -1046,6 +1173,7 @@ document.querySelectorAll('#menu .mi').forEach(b=>b.onclick=()=>{
   if(act==='pubTask'){ const t=todayStr(); $('tkStart').value=$('tkStart').value||t; $('tkEnd').value=$('tkEnd').value||t; show('taskMask'); }
   else if(act==='taskList') openTaskList();
   else if(act==='summary') openSummary();
+  else if(act==='feedback') openFeedback();
   else if(act==='switchName'){ $('app').style.display='none'; showGate(); }
   else if(act==='settings') openSettings();
   else if(act==='chpwd'){ $('np1').value=''; $('np2').value=''; show('pwMask'); }
