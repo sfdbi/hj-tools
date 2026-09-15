@@ -65,6 +65,35 @@ const EMPTY_CONFIG: AnnouncementConfig = {
   autoOverrides: {},
 };
 
+function initialAdminToken() {
+  const current = sessionStorage.getItem(TOKEN_KEY);
+  if (current) return current;
+  try {
+    // 同站点考勤工具若已配置 GitHub，优先复用管理员亲自保存的令牌。
+    const attendance = JSON.parse(localStorage.getItem('hj-att-lc') || 'null') as { token?: string } | null;
+    return attendance?.token || '';
+  } catch {
+    return '';
+  }
+}
+
+async function githubRequestError(response: Response, action: string) {
+  const body = (await response.json().catch(() => ({}))) as { message?: string };
+  if (response.status === 401) {
+    return new Error(`${action}失败：GitHub 令牌无效或已被撤销，请更换后重试。`);
+  }
+  if (response.status === 403) {
+    return new Error(`${action}失败：令牌没有 Contents 写入权限，或 GitHub API 访问频率已超限。`);
+  }
+  if (response.status === 404) {
+    return new Error(`${action}失败：令牌未授权访问 sfdbi/hj-tools 仓库。`);
+  }
+  if (response.status === 409 || response.status === 422) {
+    return new Error(`${action}失败：公告已被其他人更新，请刷新页面后重试。`);
+  }
+  return new Error(`${action}失败（${response.status}）：${body.message || '请稍后重试'}`);
+}
+
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -192,7 +221,9 @@ export default function AnnouncementCenter() {
   const [adminMode, setAdminMode] = useState<'closed' | 'login' | 'manage'>('closed');
   const [password, setPassword] = useState('');
   const [adminError, setAdminError] = useState('');
-  const [token, setToken] = useState(() => sessionStorage.getItem(TOKEN_KEY) || '');
+  const [token, setToken] = useState(initialAdminToken);
+  const [tokenChecking, setTokenChecking] = useState(false);
+  const [tokenStatus, setTokenStatus] = useState('');
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -270,8 +301,12 @@ export default function AnnouncementCenter() {
       'X-GitHub-Api-Version': '2022-11-28',
     };
     const endpoint = `https://api.github.com/repos/${REPO}/contents/${CONFIG_PATH}`;
-    const currentResponse = await fetch(`${endpoint}?ref=main&_=${Date.now()}`, { headers, cache: 'no-store' });
-    if (!currentResponse.ok) throw new Error(`读取云端公告失败（${currentResponse.status}）`);
+    // 公告仓库为公开读；读取时不携带令牌，避免过期令牌把本可正常的读取请求变成 401。
+    const currentResponse = await fetch(`${endpoint}?ref=main&_=${Date.now()}`, {
+      headers: { Accept: 'application/vnd.github+json' },
+      cache: 'no-store',
+    });
+    if (!currentResponse.ok) throw await githubRequestError(currentResponse, '读取云端公告');
     const currentFile = (await currentResponse.json()) as { sha: string; content: string };
     const latest = JSON.parse(base64ToUtf8(currentFile.content)) as AnnouncementConfig;
     latest.manual = Array.isArray(latest.manual) ? latest.manual : [];
@@ -288,8 +323,7 @@ export default function AnnouncementCenter() {
       }),
     });
     if (!saveResponse.ok) {
-      const body = (await saveResponse.json().catch(() => ({}))) as { message?: string };
-      throw new Error(`保存公告失败（${saveResponse.status}）：${body.message || '请检查令牌权限'}`);
+      throw await githubRequestError(saveResponse, '保存公告');
     }
     setConfig(next);
     setAutoNotices((current) =>
@@ -299,6 +333,38 @@ export default function AnnouncementCenter() {
         return [{ ...item, ...override, source: 'auto' as const }];
       }),
     );
+  };
+
+  const testToken = async () => {
+    if (!token.trim()) {
+      setTokenStatus('');
+      setAdminError('请先输入 GitHub 令牌');
+      return;
+    }
+    setTokenChecking(true);
+    setTokenStatus('');
+    setAdminError('');
+    try {
+      const response = await fetch(`https://api.github.com/repos/${REPO}`, {
+        headers: {
+          Authorization: `Bearer ${token.trim()}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+        cache: 'no-store',
+      });
+      if (!response.ok) throw await githubRequestError(response, '授权测试');
+      const repository = (await response.json()) as { permissions?: { push?: boolean } };
+      if (!repository.permissions?.push) {
+        throw new Error('授权测试失败：令牌可读取仓库，但没有 Contents 写入权限。');
+      }
+      sessionStorage.setItem(TOKEN_KEY, token.trim());
+      setTokenStatus('授权正常，可以发布、修改和删除公告。');
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : '授权测试失败');
+    } finally {
+      setTokenChecking(false);
+    }
   };
 
   const saveDraft = async () => {
@@ -507,14 +573,28 @@ export default function AnnouncementCenter() {
             </div>
             <div className="mt-3">
               <label className="text-[11px] text-slate-400">GitHub 发布令牌（仅保留在当前标签页会话，需 Contents 读写权限）</label>
-              <input
-                type="password"
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-                placeholder="github_pat_… 或 ghp_…"
-                autoComplete="off"
-                className="mt-1 w-full rounded-lg border border-[#2b5a82] bg-[#071e33] px-3 py-2 text-xs text-white outline-none focus:border-[#d4af37]"
-              />
+              <div className="mt-1 flex gap-2">
+                <input
+                  type="password"
+                  value={token}
+                  onChange={(event) => {
+                    setToken(event.target.value);
+                    setTokenStatus('');
+                    setAdminError('');
+                  }}
+                  placeholder="github_pat_… 或 ghp_…"
+                  autoComplete="off"
+                  className="min-w-0 flex-1 rounded-lg border border-[#2b5a82] bg-[#071e33] px-3 py-2 text-xs text-white outline-none focus:border-[#d4af37]"
+                />
+                <button
+                  onClick={() => void testToken()}
+                  disabled={tokenChecking}
+                  className="shrink-0 rounded-lg border border-sky-400/40 px-3 py-2 text-xs text-sky-300 hover:bg-sky-400/10 disabled:opacity-50"
+                >
+                  {tokenChecking ? '测试中…' : '测试授权'}
+                </button>
+              </div>
+              {tokenStatus && <p className="mt-1.5 text-[11px] text-emerald-300">{tokenStatus}</p>}
             </div>
           </div>
           <div className="px-6 py-5">
