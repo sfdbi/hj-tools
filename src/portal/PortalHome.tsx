@@ -23,6 +23,8 @@ const TOOLS: ToolCard[] = [
     icon: '📈',
     path: '/rating-curve',
     tags: ['水文整编', '定线', '三性检验'],
+    windowsInstaller:
+      'https://github.com/sfdbi/hj-tools/releases/download/rating-curve-v1.0.0/RatingCurve-Setup-1.0.0.exe',
   },
   {
     key: 'flow-discharge',
@@ -31,6 +33,7 @@ const TOOLS: ToolCard[] = [
     icon: '🌊',
     path: '/flow-discharge',
     tags: ['流量测验', '推流', '成果导出'],
+    apk: './apk/flow-discharge.apk',
   },
   {
     key: 'attendance',
