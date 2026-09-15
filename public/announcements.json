@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "autoSince": "2026-09-15T00:00:00+08:00",
+  "manual": [
+    {
+      "id": "manual-announcement-center-20260915",
+      "title": "工具集公告中心上线",
+      "summary": "网站顶部新增公告区，点击公告可查看完整内容。",
+      "content": "工具集公告中心已上线。\n\n主要功能：\n1. 首页醒目位置展示最新公告与未读状态；\n2. 点击公告可弹窗查看详细内容；\n3. 后续网站功能更新会自动生成更新公告；\n4. 管理员可对手动公告和自动公告进行新增、修改、隐藏或删除。",
+      "publishedAt": "2026-09-15T09:00:00+08:00",
+      "level": "important",
+      "pinned": true,
+      "source": "manual"
+    },
+    {
+      "id": "manual-hadcp-windows-20260914",
+      "title": "H-ADCP Windows 安装版已上线",
+      "summary": "V0.2.4.2 EXE 安装包已放置在 H-ADCP 工具卡片下方。",
+      "content": "H-ADCP 在线推流数据处理工具 V0.2.4.2 Windows 安装版已发布。\n\n请在工具集首页的“H-ADCP 在线推流数据处理”卡片下方，点击“Windows 版下载（EXE 安装包）”下载。\n\n版本：V0.2.4.2\n系统：Windows 64 位",
+      "publishedAt": "2026-09-14T16:00:00+08:00",
+      "level": "update",
+      "pinned": false,
+      "source": "manual"
+    }
+  ],
+  "autoOverrides": {}
+}

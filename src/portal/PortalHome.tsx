@@ -1,6 +1,7 @@
 // 门户首页：汉江局技术管理室 · 工具集
 // 主题色"流金蓝"：深蓝底 + 流金点缀；工具卡片式布局，预留窗口供后续工具接入
 import { Link } from 'react-router';
+import AnnouncementCenter from '@/portal/AnnouncementCenter';
 
 interface ToolCard {
   key: string;
@@ -79,6 +80,8 @@ export default function PortalHome() {
 
       {/* 主体 */}
       <main className="mx-auto max-w-6xl px-6 py-10">
+        <AnnouncementCenter />
+
         <div className="mb-8">
           <h2 className="text-xl font-semibold text-white">
             专业工具 <span className="ml-2 text-sm font-normal text-slate-400">点击卡片进入工具</span>
